@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.log
+
+# Virtualenv
+venv/
+.env
+.venv/
+
+# Django
+db.sqlite3
+media/
+staticfiles/
+static/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
