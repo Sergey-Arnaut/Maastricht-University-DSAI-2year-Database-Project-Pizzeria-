@@ -1,7 +1,7 @@
 import mysql.connector
 import os
 
-# Settings needed for connection to db
+# Настройки подключения к БД
 db_config = {
     'host': 'mysql-bccc7a6-sergey-1c63.h.aivencloud.com',
     'user': 'lena',
@@ -24,128 +24,88 @@ def create_connection():
         return None
 
 
-def run_simple_select_query(conn):
-    """Выполняет простой SELECT запрос для проверки соединения"""
+def run_sql_file(conn, filename):
+    """Запускает SQL-скрипт из файла"""
     try:
         cursor = conn.cursor()
+        with open(filename, "r", encoding="utf-8") as f:
+            sql_script = f.read()
 
-        # Простой запрос для проверки соединения
-        cursor.execute("SELECT 1")
-        result = cursor.fetchone()
+        # Выполняем все команды по очереди
+        for statement in sql_script.split(";"):
+            stmt = statement.strip()
+            if stmt:
+                cursor.execute(stmt)
 
-        print(f"✅ Simple SELECT query executed successfully! Result: {result[0]}")
-        return True
-
-    except mysql.connector.Error as e:
-        print(f"❌ Error executing SELECT query: {e}")
-        return False
-
-
-def check_database_tables(conn):
-    """Проверяет существование таблиц в базе данных"""
-    try:
-        cursor = conn.cursor()
-
-        # Получаем список всех таблиц в базе данных
-        cursor.execute("SHOW TABLES")
-        tables = cursor.fetchall()
-
-        print("📊 Database tables:")
-        if tables:
-            for table in tables:
-                print(f"   ✅ {table[0]}")
-            return True
-        else:
-            print("   ❌ No tables found in database")
-            return False
-
-    except mysql.connector.Error as e:
-        print(f"❌ Error checking database tables: {e}")
-        return False
-
-
-def test_connection_and_queries():
-    """Тестирует соединение и выполняет простые запросы"""
-    print("🚀 Testing database connection and queries...")
-    print("=" * 50)
-
-    # Создаем соединение
-    conn = create_connection()
-    if not conn:
-        return False
-
-    try:
-        # Тест 1: Простой SELECT запрос
-        print("\n1. 🔍 Running simple SELECT query...")
-        if not run_simple_select_query(conn):
-            return False
-
-        # Тест 2: Проверка таблиц
-        print("\n2. 📋 Checking database tables...")
-        if not check_database_tables(conn):
-            return False
-
-        # Тест 3: Пример запроса к конкретной таблице (если таблицы существуют)
-        print("\n3. 🍕 Sample data query (if tables exist)...")
-        try:
-            cursor = conn.cursor()
-            # Пробуем получить данные из таблицы Pizza, если она существует
-            cursor.execute("""
-                SELECT COUNT(*) as table_exists 
-                FROM information_schema.tables 
-                WHERE table_schema = 'our_little_secret' 
-                AND table_name = 'Pizza'
-            """)
-            pizza_table_exists = cursor.fetchone()[0] > 0
-
-            if pizza_table_exists:
-                cursor.execute("SELECT pizza_id, name, size FROM Pizza LIMIT 3")
-                pizzas = cursor.fetchall()
-                if pizzas:
-                    print("   Sample pizzas:")
-                    for pizza in pizzas:
-                        print(f"     {pizza[0]}. {pizza[1]} ({pizza[2]})")
-                else:
-                    print("   No pizzas found in table")
-            else:
-                print("   Pizza table doesn't exist yet")
-
-        except mysql.connector.Error as e:
-            print(f"   ℹ️  Info: {e}")
-
-        print("\n" + "=" * 50)
-        print("🎉 All connection tests passed successfully!")
-        print("✅ Database connection is working properly")
-        print("✅ Simple SELECT queries can be executed")
-        print("✅ Ready for application development")
-
-        return True
+        conn.commit()
+        print(f"✅ SQL file '{filename}' executed successfully!")
 
     except Exception as e:
-        print(f"❌ Error during testing: {e}")
+        print(f"❌ Error executing SQL file '{filename}': {e}")
+
+
+def create_pizza_price_view(conn):
+    """Создает представление для расчета цен пицц"""
+    try:
+        cursor = conn.cursor()
+
+        view_sql = """
+        CREATE OR REPLACE VIEW PizzaPriceView AS
+        SELECT 
+            p.pizza_id,
+            p.name AS pizza_name,
+            p.size,
+            p.base_price,
+            SUM(pi.quantity * i.price_per_unit) AS ingredients_cost,
+            ROUND(SUM(pi.quantity * i.price_per_unit) * 1.5, 2) AS price_before_vat,
+            ROUND(SUM(pi.quantity * i.price_per_unit) * 1.5 * 1.2, 2) AS final_price
+        FROM Pizza p
+        JOIN Pizza_Ingredients pi ON p.pizza_id = pi.pizza_id
+        JOIN Ingredient i ON pi.ingredient_id = i.ingredient_id
+        GROUP BY p.pizza_id, p.name, p.size, p.base_price;
+        """
+
+        cursor.execute(view_sql)
+        conn.commit()
+        print("✅ Pizza price view created successfully!")
+        return True
+
+    except mysql.connector.Error as e:
+        print(f"❌ Error creating pizza price view: {e}")
         return False
-    finally:
-        if conn:
-            conn.close()
-            print("\n🔌 Database connection closed.")
 
 
-def main():
-    """Основная функция"""
-    print("🔌 DATABASE CONNECTION TEST")
-    print("=" * 50)
+def retrieve_menu_data(conn):
+    """Извлекает данные меню из представления"""
+    try:
+        cursor = conn.cursor(dictionary=True)
 
-    # Запускаем тесты
-    success = test_connection_and_queries()
+        print("\n🍕 RETRIEVING MENU DATA")
+        print("=" * 50)
 
-    if success:
-        print("\n Week 2 criteria completed!")
-        print("   - Database connection established")
-        print("   - Simple SELECT queries executed")
-        print("   - Ready for application development")
-    else:
-        print("\n❌ Connection test failed")
+        cursor.execute("SELECT * FROM PizzaPriceView;")
+        rows = cursor.fetchall()
+
+        for row in rows:
+            print(f"{row['pizza_name']} ({row['size']}): {row['final_price']} EUR")
+
+        return rows
+
+    except mysql.connector.Error as e:
+        print(f"❌ Error retrieving menu data: {e}")
+        return []
 
 
 if __name__ == "__main__":
-    main()
+    conn = create_connection()
+    if conn:
+        # 1. Загружаем тестовые данные из файла
+        run_sql_file(conn, "insert_sample_data.sql")
+
+        # 2. Создаем представление
+        create_pizza_price_view(conn)
+
+        # 3. Достаем меню
+        retrieve_menu_data(conn)
+
+        conn.close()
