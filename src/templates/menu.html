@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Меню{% endblock %}
+{% block content %}
+  <h1 class="mb-3">Меню</h1>
+  <div class="row g-3">
+    {% for x in items %}
+      <div class="col-md-6">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">
+              {{ x.name }} ({{ x.size }})
+              {% if x.is_vegan %}<span class="badge bg-success ms-2">Vegan</span>{% endif %}
+              {% if x.is_vegetarian and not x.is_vegan %}<span class="badge bg-info ms-2">Vegetarian</span>{% endif %}
+            </h5>
+            {% if x.price %}
+              <p class="card-text">
+                Цена: <strong>{{ x.price }}</strong>
+                <small class="text-muted">(по составу)</small><br>
+                <small class="text-muted">Себестоимость: {{ x.ingredients_cost }}</small>
+              </p>
+            {% else %}
+              <p class="text-muted">Нет состава — цена не рассчитана</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <p>Меню пусто.</p>
+    {% endfor %}
+  </div>
+{% endblock %}
