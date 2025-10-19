@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Корзина{% endblock %}
+{% block content %}
+<h1>Корзина</h1>
+
+{% if rows %}
+<table class="table">
+  <thead><tr><th>Пицца</th><th>Размер</th><th>Кол-во</th><th>Цена</th><th>Сумма</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.pizza.name }}</td>
+      <td>{{ r.pizza.size }}</td>
+      <td>{{ r.qty }}</td>
+      <td>{{ r.unit }}</td>
+      <td>{{ r.sum }}</td>
+      <td>
+        <form method="post" action="{% url 'remove_from_cart' r.pizza.pizza_id %}">
+          {% csrf_token %}
+          <button class="btn btn-sm btn-outline-danger">Удалить</button>
+        </form>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><th colspan="4" class="text-end">Подытог:</th><th>{{ subtotal }}</th><th></th></tr>
+  </tfoot>
+</table>
+
+<div class="d-flex gap-3">
+  <form method="post" action="{% url 'clear_cart' %}">
+    {% csrf_token %}
+    <button class="btn btn-outline-secondary">Очистить</button>
+  </form>
+
+  <form method="post" action="{% url 'checkout' %}" class="d-flex gap-2">
+    {% csrf_token %}
+    <input type="text" name="discount_code" placeholder="Промокод" class="form-control" style="max-width:200px">
+    <button class="btn btn-success">Оформить заказ</button>
+  </form>
+</div>
+
+{% else %}
+<p class="text-muted">Корзина пуста.</p>
+{% endif %}
+
+<p class="mt-3"><a class="btn btn-secondary" href="{% url 'menu' %}">Назад к меню</a></p>
+{% endblock %}

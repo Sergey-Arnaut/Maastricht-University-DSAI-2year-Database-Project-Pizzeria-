@@ -1,32 +1,43 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Меню{% endblock %}
+
 {% block content %}
-  <h1 class="mb-3">Меню</h1>
-  <div class="row g-3">
-    {% for x in items %}
-      <div class="col-md-6">
-        <div class="card shadow-sm">
-          <div class="card-body">
-            <h5 class="card-title">
-              {{ x.name }} ({{ x.size }})
-              {% if x.is_vegan %}<span class="badge bg-success ms-2">Vegan</span>{% endif %}
-              {% if x.is_vegetarian and not x.is_vegan %}<span class="badge bg-info ms-2">Vegetarian</span>{% endif %}
-            </h5>
-            {% if x.price %}
-              <p class="card-text">
-                Цена: <strong>{{ x.price }}</strong>
-                <small class="text-muted">(по составу)</small><br>
-                <small class="text-muted">Себестоимость: {{ x.ingredients_cost }}</small>
-              </p>
-            {% else %}
-              <p class="text-muted">Нет состава — цена не рассчитана</p>
-            {% endif %}
-          </div>
+<div class="row g-3">
+  {% for x in items %}
+    <div class="col-md-6">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">
+            {{ x.name }} ({{ x.size }})
+            {% if x.is_vegan %}<span class="badge bg-success ms-2">Vegan</span>{% endif %}
+            {% if x.is_vegetarian and not x.is_vegan %}<span class="badge bg-info ms-2">Vegetarian</span>{% endif %}
+          </h5>
+
+          {% if x.price %}
+            <p>Цена: <strong>{{ x.price }}</strong></p>
+          {% else %}
+            <p class="text-muted">Нет состава — цена не рассчитана</p>
+          {% endif %}
+
+          <!-- ВАЖНО: форма внутри цикла, используем x.id -->
+          <form method="post" action="{% url 'add_to_cart' x.id %}" class="mt-2">
+            {% csrf_token %}
+            <input type="number" name="qty" min="1" value="1" style="width:80px">
+            <button class="btn btn-danger btn-sm">В корзину</button>
+          </form>
         </div>
       </div>
-    {% empty %}
-      <p>Меню пусто.</p>
-    {% endfor %}
-  </div>
+    </div>
+  {% empty %}
+    <p>Меню пусто.</p>
+  {% endfor %}
+</div>
+<p class="mt-3">
+  <a class="btn btn-outline-primary" href="{% url 'view_cart' %}">Перейти в корзину</a>
+</p>
+<p class="mt-3">
+  <a class="btn btn-outline-primary" href="{% url 'view_cart' %}">Перейти в корзину</a>
+</p>
+
 {% endblock %}
