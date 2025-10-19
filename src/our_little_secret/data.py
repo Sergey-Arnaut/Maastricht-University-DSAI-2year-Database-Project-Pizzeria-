@@ -96,6 +96,98 @@ def retrieve_menu_data(conn):
         return []
 
 
+def get_undelivered_orders(conn):
+    """Получает не доставленные заказы"""
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT 
+            o.order_id,
+            o.customer_id,
+            c.first_name,
+            c.last_name,
+            o.status,
+            o.order_timestamp,
+            o.total_price,
+            o.delivery_postal_code,
+            o.estimated_delivery_time,
+            TIMESTAMPDIFF(MINUTE, o.order_timestamp, NOW()) AS minutes_pending
+        FROM `Order` o
+        JOIN Customer c ON o.customer_id = c.customer_id
+        WHERE o.status NOT IN ('delivered', 'cancelled')
+        ORDER BY o.order_timestamp ASC;
+        """
+
+        cursor.execute(query)
+        results = cursor.fetchall()
+
+        print("\n🚫 UNDELIVERED ORDERS")
+        print("=" * 60)
+
+        if not results:
+            print("✅ All orders have been delivered or cancelled!")
+            return []
+
+        for row in results:
+            status_emoji = {
+                'pending': '⏳',
+                'preparing': '👨‍🍳',
+                'baking': '🔥',
+                'ready': '✅',
+                'out_for_delivery': '🚗'
+            }.get(row['status'], '❓')
+
+            print(f"Order #{row['order_id']} {status_emoji}")
+            print(f"   Customer: {row['first_name']} {row['last_name']}")
+            print(f"   Status: {row['status']}")
+            print(f"   Ordered: {row['order_timestamp']}")
+            print(f"   Total: {row['total_price']} EUR")
+            print(f"   Delivery to: {row['delivery_postal_code']}")
+            print(f"   Pending for: {row['minutes_pending']} minutes")
+            print("-" * 40)
+
+        return results
+
+    except mysql.connector.Error as e:
+        print(f"❌ Error retrieving undelivered orders: {e}")
+        return []
+
+def get_top_selling_pizzas(conn):
+    """Получает самые продаваемые пиццы"""
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT 
+            p.name AS pizza_name,
+            p.size,
+            SUM(oi.pizza_quantity) AS total_sold,
+            SUM(oi.pizza_quantity * p.base_price) AS total_revenue
+        FROM Pizza p
+        JOIN OrderItem oi ON p.pizza_id = oi.pizza_id
+        JOIN `Order` o ON oi.order_id = o.order_id
+        WHERE o.status != 'cancelled'
+        GROUP BY p.pizza_id, p.name, p.size
+        ORDER BY total_sold DESC;
+        """
+
+        cursor.execute(query)
+        results = cursor.fetchall()
+
+        print("\n🏆 TOP SELLING PIZZAS")
+        print("=" * 50)
+        for row in results:
+            print(f"{row['pizza_name']} ({row['size']}): {row['total_sold']} sold, Revenue: {row['total_revenue']} EUR")
+
+        return results
+
+    except mysql.connector.Error as e:
+        print(f"❌ Error retrieving top selling pizzas: {e}")
+        return []
+
+
+
 if __name__ == "__main__":
     conn = create_connection()
     if conn:
@@ -107,5 +199,12 @@ if __name__ == "__main__":
 
         # 3. Достаем меню
         retrieve_menu_data(conn)
+
+        #4 top seller pizzas
+        print("\n Analyzing sales data...")
+        get_top_selling_pizzas(conn)
+
+        #5 undelivered orders
+        get_undelivered_orders(conn)
 
         conn.close()
