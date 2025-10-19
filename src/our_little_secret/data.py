@@ -152,7 +152,138 @@ def get_undelivered_orders(conn):
     except mysql.connector.Error as e:
         print(f"❌ Error retrieving undelivered orders: {e}")
         return []
+def get_delivery_earnings_by_gender(conn):
+    """Анализ заработков доставщиков по полу"""
+    try:
+        cursor = conn.cursor(dictionary=True)
 
+        query = """
+        SELECT 
+            dp.gender,
+            COUNT(DISTINCT dp.delivery_person_id) AS delivery_persons_count,
+            SUM(der.completed_deliveries) AS total_deliveries,
+            SUM(der.restaurant_revenue) AS total_revenue,
+            AVG(der.total_earnings) AS avg_earnings,
+            SUM(der.total_earnings) AS total_earnings
+        FROM DeliveryPerson dp
+        JOIN DeliveryEarningsReport der ON dp.delivery_person_id = der.delivery_person_id
+        GROUP BY dp.gender
+        ORDER BY total_earnings DESC;
+        """
+
+        cursor.execute(query)
+        results = cursor.fetchall()
+
+        print("\nDELIVERY EARNINGS BY GENDER")
+        print("=" * 60)
+
+        if not results:
+            print("No data found")
+            return []
+
+        for row in results:
+            gender_display = row['gender'] if row['gender'] else 'Not specified'
+            print(f"  {gender_display}:")
+            print(f"    Delivery Persons: {row['delivery_persons_count']}")
+            print(f"    Total Deliveries: {row['total_deliveries']}")
+            print(f"    Restaurant Revenue: {row['total_revenue']:.2f} EUR")
+            print(f"    Average Earnings: {row['avg_earnings']:.2f} EUR")
+            print(f"    Total Earnings: {row['total_earnings']:.2f} EUR")
+            print("-" * 40)
+
+        return results
+
+    except mysql.connector.Error as e:
+        print(f"Error retrieving delivery earnings by gender: {e}")
+        return []
+
+    except mysql.connector.Error as e:
+        print(f"❌ Error retrieving earnings by gender: {e}")
+        return []
+def get_delivery_earnings_by_age(conn):
+    """Анализ заработков доставщиков по возрасту"""
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT 
+            der.age_group,
+            COUNT(DISTINCT der.delivery_person_id) AS delivery_persons_count,
+            SUM(der.completed_deliveries) AS total_deliveries,
+            SUM(der.restaurant_revenue) AS total_revenue,
+            AVG(der.total_earnings) AS avg_earnings,
+            SUM(der.total_earnings) AS total_earnings
+        FROM DeliveryEarningsReport der
+        GROUP BY der.age_group
+        ORDER BY total_earnings DESC;
+        """
+
+        cursor.execute(query)
+        results = cursor.fetchall()
+
+        print("\nDELIVERY EARNINGS BY AGE GROUP")
+        print("=" * 60)
+
+        if not results:
+            print("No data found")
+            return []
+
+        for row in results:
+            print(f"  Age {row['age_group']}:")
+            print(f"    Delivery Persons: {row['delivery_persons_count']}")
+            print(f"    Total Deliveries: {row['total_deliveries']}")
+            print(f"    Restaurant Revenue: {row['total_revenue']:.2f} EUR")
+            print(f"    Average Earnings: {row['avg_earnings']:.2f} EUR")
+            print(f"    Total Earnings: {row['total_earnings']:.2f} EUR")
+            print("-" * 40)
+
+        return results
+
+    except mysql.connector.Error as e:
+        print(f"Error retrieving delivery earnings by age: {e}")
+        return []
+def get_delivery_earnings_by_postal_code(conn):
+    """Анализ заработков доставщиков по почтовому индексу"""
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT 
+            der.delivery_postal_code,
+            COUNT(DISTINCT der.delivery_person_id) AS delivery_persons_count,
+            SUM(der.completed_deliveries) AS total_deliveries,
+            SUM(der.restaurant_revenue) AS total_revenue,
+            AVG(der.total_earnings) AS avg_earnings,
+            SUM(der.total_earnings) AS total_earnings
+        FROM DeliveryEarningsReport der
+        GROUP BY der.delivery_postal_code
+        ORDER BY total_earnings DESC;
+        """
+
+        cursor.execute(query)
+        results = cursor.fetchall()
+
+        print("\nDELIVERY EARNINGS BY POSTAL CODE")
+        print("=" * 60)
+
+        if not results:
+            print("No data found")
+            return []
+
+        for row in results:
+            print(f"  Postal Code: {row['delivery_postal_code']}")
+            print(f"    Delivery Persons: {row['delivery_persons_count']}")
+            print(f"    Total Deliveries: {row['total_deliveries']}")
+            print(f"    Restaurant Revenue: {row['total_revenue']:.2f} EUR")
+            print(f"    Average Earnings: {row['avg_earnings']:.2f} EUR")
+            print(f"    Total Earnings: {row['total_earnings']:.2f} EUR")
+            print("-" * 40)
+
+        return results
+
+    except mysql.connector.Error as e:
+        print(f"Error retrieving delivery earnings by postal code: {e}")
+        return []
 def get_top_selling_pizzas(conn):
     """Получает самые продаваемые пиццы"""
     try:
@@ -182,6 +313,8 @@ def get_top_selling_pizzas(conn):
 
         return results
 
+
+
     except mysql.connector.Error as e:
         print(f"❌ Error retrieving top selling pizzas: {e}")
         return []
@@ -206,5 +339,8 @@ if __name__ == "__main__":
 
         #5 undelivered orders
         get_undelivered_orders(conn)
-
+        #6 salary stats
+        get_delivery_earnings_by_gender(conn)
+        get_delivery_earnings_by_age(conn)
+        get_delivery_earnings_by_postal_code(conn)
         conn.close()
