@@ -1,10 +1,7 @@
--- =============================================
--- Pizza Delivery Database Schema
--- =============================================
+
 
 USE our_little_secret;
 
--- Таблица Customers
 CREATE TABLE IF NOT EXISTS Customer (
     customer_id INT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
@@ -21,7 +18,6 @@ CREATE TABLE IF NOT EXISTS Customer (
     INDEX idx_postal_code (postal_code)
 );
 
--- Таблица Delivery Persons
 CREATE TABLE IF NOT EXISTS DeliveryPerson (
     delivery_person_id INT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
@@ -37,11 +33,10 @@ CREATE TABLE IF NOT EXISTS DeliveryPerson (
     INDEX idx_rating (rating)
 );
 
--- Таблица Discount Codes
 CREATE TABLE IF NOT EXISTS DiscountCode (
     discount_id INT AUTO_INCREMENT PRIMARY KEY,
     discount_code VARCHAR(20) UNIQUE NOT NULL,
-    password VARCHAR(255), -- если требуется аутентификация
+    password VARCHAR(255),
     discount_value INT NOT NULL CHECK (discount_value > 0),
     discount_type ENUM('percent', 'value') NOT NULL,
     valid_from DATE,
@@ -53,7 +48,6 @@ CREATE TABLE IF NOT EXISTS DiscountCode (
     INDEX idx_is_active (is_active)
 );
 
--- Таблица Ingredients
 CREATE TABLE IF NOT EXISTS Ingredient (
     ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -70,7 +64,6 @@ CREATE TABLE IF NOT EXISTS Ingredient (
     INDEX idx_allergen (allergen)
 );
 
--- Таблица Pizzas
 CREATE TABLE IF NOT EXISTS Pizza (
     pizza_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -89,7 +82,6 @@ CREATE TABLE IF NOT EXISTS Pizza (
     INDEX idx_availability (availability)
 );
 
--- Таблица Pizza Ingredients (связь многие-ко-многим)
 CREATE TABLE IF NOT EXISTS Pizza_Ingredients (
     pizza_id INT NOT NULL,
     ingredient_id INT NOT NULL,
@@ -104,7 +96,6 @@ CREATE TABLE IF NOT EXISTS Pizza_Ingredients (
     INDEX idx_ingredient_id (ingredient_id)
 );
 
--- Таблица Desserts
 CREATE TABLE IF NOT EXISTS Dessert (
     dessert_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -120,7 +111,6 @@ CREATE TABLE IF NOT EXISTS Dessert (
     INDEX idx_availability (availability)
 );
 
--- Таблица Drinks
 CREATE TABLE IF NOT EXISTS Drink (
     drink_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -136,7 +126,6 @@ CREATE TABLE IF NOT EXISTS Drink (
     INDEX idx_availability (availability)
 );
 
--- Таблица Menus
 CREATE TABLE IF NOT EXISTS Menu (
     menu_id INT AUTO_INCREMENT PRIMARY KEY,
     menu_name VARCHAR(100) NOT NULL,
@@ -148,7 +137,6 @@ CREATE TABLE IF NOT EXISTS Menu (
     INDEX idx_is_active (is_active)
 );
 
--- Таблица Menu Items
 CREATE TABLE IF NOT EXISTS MenuItems (
     menu_item_id INT AUTO_INCREMENT PRIMARY KEY,
     menu_id INT NOT NULL,
@@ -164,7 +152,6 @@ CREATE TABLE IF NOT EXISTS MenuItems (
     INDEX idx_product_type (product_type)
 );
 
--- Таблица Orders
 CREATE TABLE IF NOT EXISTS `Order` (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL,
@@ -191,12 +178,11 @@ CREATE TABLE IF NOT EXISTS `Order` (
     INDEX idx_order_timestamp (order_timestamp)
 );
 
--- Таблица Order Items
 CREATE TABLE IF NOT EXISTS OrderItem (
     order_item_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
     pizza_id INT,
-    ingredient_id INT, -- для дополнительных ингредиентов
+    ingredient_id INT,
     pizza_quantity INT DEFAULT 1 CHECK (pizza_quantity > 0),
     drink_id INT,
     drink_quantity INT DEFAULT 0 CHECK (drink_quantity >= 0),
@@ -216,7 +202,6 @@ CREATE TABLE IF NOT EXISTS OrderItem (
     INDEX idx_pizza_id (pizza_id)
 );
 
--- Таблица Payments
 CREATE TABLE IF NOT EXISTS Payment (
     payment_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
@@ -234,7 +219,6 @@ CREATE TABLE IF NOT EXISTS Payment (
     INDEX idx_payment_timestamp (payment_timestamp)
 );
 
--- Таблица Discount Redemptions
 CREATE TABLE IF NOT EXISTS DiscountRedemption (
     redemption_id INT AUTO_INCREMENT PRIMARY KEY,
     discount_id INT NOT NULL,

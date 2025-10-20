@@ -7,19 +7,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR.parent / ".env")
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-=@44c3l=yz^ms2v3e59$dt$n_%6)xfu@l0vl1-+zo+nr$0o$c9'
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = []
 
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -61,8 +55,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'our_little_secret.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
 
 DATABASES = {
     "default": {
@@ -76,15 +69,12 @@ DATABASES = {
             "charset": "utf8mb4",
             "use_unicode": True,
             "ssl_mode": os.getenv("MYSQL_SSL_MODE", "REQUIRED"),
-            # Если добавишь CA-файл от Aiven на Render:
-            # "ssl": {"ca": os.getenv("MYSQL_SSL_CA")},
+
         },
     }
 }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -102,8 +92,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
+
 
 LANGUAGE_CODE = 'en-us'
 
@@ -117,21 +106,18 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:8000",
 ]
-CSRF_COOKIE_SECURE = False       # since you're on http://
+CSRF_COOKIE_SECURE = False
 SESSION_COOKIE_SECURE = False
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
+
 
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]   # для dev
-STATIC_ROOT = BASE_DIR / "staticfiles"     # для prod (collectstatic)
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "menu"
 LOGOUT_REDIRECT_URL = "login"
-  # after logout → starting page ("/" = login)

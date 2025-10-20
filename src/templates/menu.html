@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Меню{% endblock %}
+{% block title %}Menu{% endblock %}
 
 {% block content %}
-<h1 class="mb-3">Меню</h1>
+<h1 class="mb-3">Menu</h1>
 
-<h3 class="mt-4">Пиццы</h3>
+<h3 class="mt-4">Pizza</h3>
 <div class="row g-3">
   {% for x in pizzas %}
     <div class="col-md-6">
@@ -17,67 +17,69 @@
           </h5>
 
           {% if x.price %}
-            <p>Цена: <strong>{{ x.price }}</strong> €</p>
-            <form method="post" action="{% url 'add_pizza_to_cart' x.id %}" class="mt-2">
+            <p>Price <strong>{{ x.price }}</strong> €</p>
+            <form method="post" action="{% url 'add_to_cart' x.id %}" class="mt-2 d-flex gap-2 align-items-center">
               {% csrf_token %}
-              <input type="number" name="qty" min="1" value="1" style="width:80px">
-              <button class="btn btn-danger btn-sm">В корзину</button>
+              <input type="number" name="qty" min="1" value="1" style="width:80px" class="form-control form-control-sm">
+              <button class="btn btn-danger btn-sm">To cart</button>
             </form>
           {% else %}
-            <p class="text-muted">Нет состава — цена не рассчитана</p>
-            <button class="btn btn-secondary btn-sm" disabled>В корзину</button>
+            <p class="text-muted">No price</p>
+            <button class="btn btn-secondary btn-sm" disabled>To cart</button>
           {% endif %}
         </div>
       </div>
     </div>
   {% empty %}
-    <p class="text-muted">Пиццы недоступны.</p>
+    <p class="text-muted">Pizza is unavailavle</p>
   {% endfor %}
 </div>
 
-<h3 class="mt-4">Напитки</h3>
+<h3 class="mt-4">Drinks</h3>
 <div class="row g-3">
   {% for d in drinks %}
     <div class="col-md-4">
       <div class="card shadow-sm">
         <div class="card-body">
           <h5 class="card-title">{{ d.name }}</h5>
-          <p>Цена: <strong>{{ d.price }}</strong> €</p>
-          <form method="post" action="{% url 'add_drink_to_cart' d.id %}" class="mt-2">
+          <p>Price <strong>{{ d.price }}</strong> €</p>
+          <form method="post" action="{% url 'add_drink_to_cart' d.drink_id %}" class="mt-2 d-flex gap-2 align-items-center">
             {% csrf_token %}
-            <input type="number" name="qty" min="1" value="1" style="width:80px">
-            <button class="btn btn-outline-primary btn-sm">В корзину</button>
+            <input type="number" name="qty" min="1" value="1" style="width:80px" class="form-control form-control-sm">
+            <button class="btn btn-outline-primary btn-sm">To cart</button>
           </form>
         </div>
       </div>
     </div>
   {% empty %}
-    <p class="text-muted">Напитки недоступны.</p>
+    <p class="text-muted">Drinks are unavailable</p>
   {% endfor %}
 </div>
 
-<h3 class="mt-4">Десерты</h3>
+<h3 class="mt-4">Desserts</h3>
 <div class="row g-3">
   {% for ds in desserts %}
     <div class="col-md-4">
       <div class="card shadow-sm">
         <div class="card-body">
           <h5 class="card-title">{{ ds.name }}</h5>
-          <p>Цена: <strong>{{ ds.price }}</strong> €</p>
-          <form method="post" action="{% url 'add_dessert_to_cart' ds.id %}" class="mt-2">
+          <p>Price <strong>{{ ds.price }}</strong> €</p>
+          <form method="post" action="{% url 'add_dessert_to_cart' ds.dessert_id %}" class="mt-2 d-flex gap-2 align-items-center">
             {% csrf_token %}
-            <input type="number" name="qty" min="1" value="1" style="width:80px">
-            <button class="btn btn-outline-success btn-sm">В корзину</button>
+            <input type="number" name="qty" min="1" value="1" style="width:80px" class="form-control form-control-sm">
+            <button class="btn btn-outline-success btn-sm">To cart</button>
           </form>
         </div>
       </div>
     </div>
   {% empty %}
-    <p class="text-muted">Десерты недоступны.</p>
+    <p class="text-muted">Desserts are unavailable</p>
   {% endfor %}
 </div>
 
 <p class="mt-4">
-  <a class="btn btn-outline-primary" href="{% url 'view_cart' %}">Перейти в корзину</a>
+  <a class="btn btn-outline-primary" href="{% url 'view_cart' %}">
+    To cart ({{ cart_count }})
+  </a>
 </p>
 {% endblock %}

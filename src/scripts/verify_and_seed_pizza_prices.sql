@@ -1,12 +1,9 @@
--- verify_and_seed_pizza_prices.sql
--- Makes sure every pizza has a composition so the computed price appears in PizzaPriceView.
+
 
 USE our_little_secret;
 
--- ========= 0) Quick visibility of what Django will read =========
--- AFTER running the whole script, re-run the two SELECTs at the bottom to verify.
 
--- ========= 1) Ensure ingredients exist (safe upsert) =========
+
 INSERT INTO Ingredient (name, price_per_unit, vegan, vegetarian, allergen, allergen_type, amount, unit)
 VALUES
 ('Tomato Sauce',        0.50,  TRUE,  TRUE,  FALSE, NULL, '100', 'g'),
@@ -23,7 +20,6 @@ VALUES
 ('Garlic',              0.40,  TRUE,  TRUE,  FALSE, NULL, '15',   'g')
 ON DUPLICATE KEY UPDATE price_per_unit = VALUES(price_per_unit);
 
--- ========= 2) (Re)create the view with the column names Django expects =========
 DROP VIEW IF EXISTS PizzaPriceView;
 CREATE VIEW PizzaPriceView AS
 SELECT
@@ -39,10 +35,7 @@ JOIN Ingredient i         ON i.ingredient_id = pi.ingredient_id
 WHERE p.availability = TRUE
 GROUP BY p.pizza_id, p.name, p.size;
 
--- ========= 3) Upsert compositions for ALL pizzas (case-insensitive name match) =========
--- Helper tip: you can re-run this whole block anytime; it’s idempotent.
 
--- Margherita (M)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'margherita' n,'M' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -52,7 +45,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Pepperoni (L)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'pepperoni' n,'L' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -62,7 +54,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Hawaiian (M)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'hawaiian' n,'M' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -73,7 +64,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Vegetarian (L)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'vegetarian' n,'L' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -86,7 +76,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Supreme (XL)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'supreme' n,'XL' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -101,7 +90,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- BBQ Chicken (M)  (using tomato base; if you have a BBQ sauce ingredient, swap it in)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'bbq chicken' n,'M' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -112,7 +100,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Mushroom (S)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'mushroom' n,'S' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -123,7 +110,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Four Cheese (L)  (simple: tomato + mozzarella + garlic)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'four cheese' n,'L' s,'Tomato Sauce' ing,0.5 q UNION ALL
@@ -133,7 +119,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Vegan Special (M)  (no dairy)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'vegan special' n,'M' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -146,7 +131,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Meat Lovers (XL)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'meat lovers' n,'XL' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -158,7 +142,6 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Also cover the Russian name in case it exists in your DB:
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'маргарита' n,'M' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -168,9 +151,7 @@ JOIN Pizza p ON LOWER(TRIM(p.name))=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- ========= 4) Verification =========
 
--- A) Which pizzas still lack composition?
 SELECT p.pizza_id, p.name, p.size,
        COALESCE(SUM(pi.quantity),0) AS ing_rows
 FROM Pizza p
@@ -179,7 +160,6 @@ WHERE p.availability = TRUE
 GROUP BY p.pizza_id, p.name, p.size
 ORDER BY ing_rows, p.name;
 
--- B) What will Django read?
 SELECT pizza_id, pizza_name AS name, size, ingredients_cost, price_before_vat, final_price
 FROM PizzaPriceView
 ORDER BY name, size;

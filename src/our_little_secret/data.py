@@ -1,7 +1,6 @@
 import mysql.connector
 import os
 
-#Settings for connecting to the db
 db_config = {
     'host': 'mysql-bccc7a6-sergey-1c63.h.aivencloud.com',
     'user': 'lena',
@@ -14,7 +13,6 @@ db_config = {
 
 
 def create_connection():
-    """Создает соединение с базой данных"""
     try:
         conn = mysql.connector.connect(**db_config)
         print("Successful connection to db:))")
@@ -25,7 +23,6 @@ def create_connection():
 
 
 def run_sql_file(conn, filename):
-    """Run the sql script"""
     try:
         cursor = conn.cursor()
         with open(filename, "r", encoding="utf-8") as f:
@@ -44,7 +41,6 @@ def run_sql_file(conn, filename):
 
 
 def create_pizza_price_view(conn):
-    """Creates view for pizza price"""
     try:
         cursor = conn.cursor()
 
@@ -273,23 +269,19 @@ def get_delivery_earnings_by_postal_code(conn):
         print(f"Error retrieving delivery earnings by postal code: {e}")
         return []
 
-#Transaction mechanism + rollback in case of error
 def place_order_transaction(conn, customer_id, order_items, delivery_postal_code, discount_id=None):
     cursor = None
     try:
-        #Start of transaction
         conn.start_transaction()
         cursor = conn.cursor(dictionary=True)
 
         print("Start of the order transaction")
 
-        #Check whether the client exists
         cursor.execute("SELECT customer_id FROM Customer WHERE customer_id = %s", (customer_id,))
         customer = cursor.fetchone()
         if not customer:
             raise Exception(f"Customer with ID {customer_id} not found")
 
-        #Compute the total price
         total_price = 0
         discount_amount = 0
 
@@ -318,7 +310,6 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
                     raise Exception(f"Dessert with ID {item['dessert_id']} not available")
                 total_price += dessert['price'] * item.get('quantity', 1)
 
-        #Apply the discount (if needed)
         if discount_id:
             cursor.execute("""
                 SELECT discount_value, discount_type 
@@ -334,9 +325,8 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
                     discount_amount = min(discount['discount_value'], total_price)
                 total_price = max(0, total_price - discount_amount)
             else:
-                discount_id = None  #Discount unavailable
+                discount_id = None
 
-        #Placing the order
         insert_order_sql = """
         INSERT INTO `Order` (customer_id, total_price, delivery_postal_code, discount_id, discount_amount, status)
         VALUES (%s, %s, %s, %s, %s, 'pending')
@@ -346,7 +336,6 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
 
         print(f"Order #{order_id} created")
 
-        #Adding the order items
         for item in order_items:
             if 'pizza_id' in item and item['pizza_id']:
                 cursor.execute("SELECT base_price FROM Pizza WHERE pizza_id = %s", (item['pizza_id'],))
@@ -387,12 +376,10 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
         cursor.execute(insert_payment_sql, (order_id, total_price))
         payment_id = cursor.lastrowid
 
-        #Update the payment
         cursor.execute("UPDATE `Order` SET payment_id = %s WHERE order_id = %s", (payment_id, order_id))
 
         print(f"Payment #{payment_id} created")
 
-        #Mark used discount
         if discount_id:
             insert_redemption_sql = """
             INSERT INTO DiscountRedemption (discount_id, customer_id, order_id)
@@ -401,7 +388,6 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
             cursor.execute(insert_redemption_sql, (discount_id, customer_id, order_id))
             print("Discount applied and marked")
 
-        #Confirm the transaction
         conn.commit()
         print(f"ORDER #{order_id} SUCCESSFULLY PLACED")
         print(f"   Total: {total_price:.2f} euro")
@@ -411,7 +397,6 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
         return order_id
 
     except Exception as e:
-        #Rollback in case of error
         print(f"Error: {e}")
         print("Rolling back transaction")
         if conn:
@@ -431,7 +416,6 @@ def test_vegetarian_pizza_constraint(conn):
     cursor = conn.cursor(dictionary=True)
 
     try:
-        #Find the vegan/vegetarian pizza
         cursor.execute("""
             SELECT pizza_id, name 
             FROM Pizza 
@@ -444,7 +428,6 @@ def test_vegetarian_pizza_constraint(conn):
             print("❌ No vegetarian pizzas found for testing")
             return False
 
-        #Find the ingredient
         cursor.execute("""
             SELECT ingredient_id, name 
             FROM Ingredient 
@@ -460,7 +443,6 @@ def test_vegetarian_pizza_constraint(conn):
         print(
             f"Testing: Add non-vegetarian '{non_veg_ingredient['name']}' to vegetarian pizza '{vegetarian_pizza['name']}'")
 
-        #Trying to add the ingredient
         cursor.execute("""
             INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
             VALUES (%s, %s, 1.0)
@@ -485,7 +467,6 @@ def test_discount_code_reuse(conn):
     cursor = conn.cursor(dictionary=True)
 
     try:
-        #Find used discount code
         cursor.execute("""
             SELECT dr.discount_id, dr.order_id, dr.customer_id
             FROM DiscountRedemption dr
@@ -511,7 +492,6 @@ def test_discount_code_reuse(conn):
 
         print(f"Testing: Reuse discount code #{used_discount['discount_id']} for order #{used_discount['order_id']}")
 
-        # Retry the discount code
         cursor.execute("""
             INSERT INTO DiscountRedemption (discount_id, customer_id, order_id)
             VALUES (%s, %s, %s)
@@ -564,7 +544,6 @@ def test_zero_pizza_price(conn):
     try:
         print("Testing: Insert pizza with zero base price")
 
-        # Пытаемся создать пиццу с нулевой ценой
         cursor.execute("""
             INSERT INTO Pizza (name, size, base_price, availability)
             VALUES ('Test Zero Price Pizza', 'M', 0.00, TRUE)
@@ -620,27 +599,20 @@ def get_top_selling_pizzas(conn):
 if __name__ == "__main__":
     conn = create_connection()
     if conn:
-        # 1. Загружаем тестовые данные из файла
         run_sql_file(conn, "insert_sample_data.sql")
 
-        # 2. Создаем представление
         create_pizza_price_view(conn)
 
-        # 3. Достаем меню
         retrieve_menu_data(conn)
 
-        #4 top seller pizzas
         print("\n Analyzing sales data...")
         get_top_selling_pizzas(conn)
 
-        #5 undelivered orders
         get_undelivered_orders(conn)
-        #6 salary stats
         get_delivery_earnings_by_gender(conn)
         get_delivery_earnings_by_age(conn)
         get_delivery_earnings_by_postal_code(conn)
 
-        #7 Testing
         test_vegetarian_pizza_constraint(conn)
         test_discount_code_reuse(conn)
         test_negative_ingredient_price(conn)

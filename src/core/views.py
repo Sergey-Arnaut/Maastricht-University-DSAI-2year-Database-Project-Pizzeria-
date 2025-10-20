@@ -12,14 +12,13 @@ from django.views.decorators.http import require_POST
 
 from .models import (
     Customer, Pizza, Order, Orderitem,
-    Discountcode, Discountredemption, Deliveryperson, Drink
+    Discountcode, Discountredemption, Deliveryperson, Drink, Dessert
 )
 from .models_view import Pizzapriceview
 from .forms import SignUpForm
 
 CANCELLATION_MINUTES = 5
 
-# 👉 Hard-coded vouchers (case-insensitive)
 VOUCHER_MAP = {
     "PEPPELS": 15,   # 15% off
     "LENA": 20,      # 20% off
@@ -27,13 +26,42 @@ VOUCHER_MAP = {
 }
 
 
+
 def _get_cart(request):
+
+    raw = request.session.get("cart", {})
+    changed = False
+    norm = {}
+    for k, v in raw.items():
+        if isinstance(k, int) or (isinstance(k, str) and k.isdigit()):
+            norm[f"P:{int(k)}"] = int(v); changed = True
+        else:
+            norm[k] = int(v)
+    if changed:
+        request.session["cart"] = norm
+        request.session.modified = True
     return request.session.get("cart", {})
 
 
 def _save_cart(request, cart):
     request.session["cart"] = cart
     request.session.modified = True
+
+
+def _cart_key(kind: str, item_id: int) -> str:
+    return f"{kind}:{int(item_id)}"
+
+
+def _parse_key(key: str):
+    if isinstance(key, str) and ":" in key:
+        kind, sid = key.split(":", 1)
+        if sid.isdigit() and kind in ("P", "D", "S"):
+            return kind, int(sid)
+    if isinstance(key, str) and key.isdigit():
+        return "P", int(key)
+    if isinstance(key, int):
+        return "P", int(key)
+    return None, None
 
 
 def _current_customer(request) -> Customer:
@@ -58,22 +86,62 @@ def _current_customer(request) -> Customer:
 
 
 def _fetch_cart_rows(cart: dict):
+
     if not cart:
         return [], Decimal("0.00")
-    ids = [int(k) for k in cart.keys()]
-    pizzas = {p.pizza_id: p for p in Pizza.objects.filter(pizza_id__in=ids)}
-    pv_map = {v.pizza_id: v for v in Pizzapriceview.objects.filter(pizza_id__in=ids)}
+
+    p_ids, d_ids, s_ids = [], [], []
+    for key in cart.keys():
+        kind, iid = _parse_key(key)
+        if kind == "P": p_ids.append(iid)
+        elif kind == "D": d_ids.append(iid)
+        elif kind == "S": s_ids.append(iid)
+
+    pizzas = {p.pizza_id: p for p in Pizza.objects.filter(pizza_id__in=p_ids)} if p_ids else {}
+    pv_map = {v.pizza_id: v for v in Pizzapriceview.objects.filter(pizza_id__in=p_ids)} if p_ids else {}
+    drinks = {d.drink_id: d for d in Drink.objects.filter(drink_id__in=d_ids)} if d_ids else {}
+    desserts = {ds.dessert_id: ds for ds in Dessert.objects.filter(dessert_id__in=s_ids)} if s_ids else {}
+
     rows, subtotal = [], Decimal("0.00")
-    for pid, qty in cart.items():
-        p = pizzas.get(int(pid))
-        if not p:
+
+    for key, qty in cart.items():
+        kind, iid = _parse_key(key)
+        if not kind:
             continue
-        v = pv_map.get(int(pid))
-        unit = (v.price_with_vat if v else Decimal(p.base_price or 0))
-        line = unit * Decimal(int(qty))
-        rows.append({"pizza": p, "qty": int(qty), "unit": unit, "sum": line})
+        qty = max(1, int(qty))
+
+        if kind == "P":
+            p = pizzas.get(iid)
+            if not p:
+                continue
+            v = pv_map.get(iid)
+            name = (v.name if v else p.name)
+            unit = (v.price_with_vat if v else Decimal(p.base_price or 0))
+            size = p.size
+            obj = p
+        elif kind == "D":
+            d = drinks.get(iid)
+            if not d or not d.availability:
+                continue
+            name = d.name
+            unit = Decimal(d.price or 0)
+            size = None
+            obj = None
+        else:
+            ds = desserts.get(iid)
+            if not ds or not ds.availability:
+                continue
+            name = ds.name
+            unit = Decimal(ds.price or 0)
+            size = None
+            obj = None
+
+        line = (Decimal(unit) * Decimal(qty)).quantize(Decimal("0.01"))
+        rows.append({"kind": kind, "id": iid, "name": name, "size": size, "qty": qty, "unit": Decimal(unit), "sum": line, "pizza": obj})
         subtotal += line
+
     return rows, subtotal.quantize(Decimal("0.01"))
+
 
 
 def _customer_total_pizzas(customer_id: int) -> int:
@@ -91,8 +159,8 @@ def _customer_total_pizzas(customer_id: int) -> int:
 
 def _birthday_freebies_discount(order_rows, drinks_qs):
     discount = Decimal("0.00")
-    if order_rows:
-        cheapest_pizza = min((r["unit"] for r in order_rows), default=Decimal("0.00"))
+    cheapest_pizza = min((r["unit"] for r in order_rows if r["kind"] == "P"), default=Decimal("0.00"))
+    if cheapest_pizza > 0:
         discount += cheapest_pizza
     d = drinks_qs.filter(availability=True).order_by("price").first()
     if d:
@@ -101,10 +169,6 @@ def _birthday_freebies_discount(order_rows, drinks_qs):
 
 
 def _ensure_voucher_code_object(code_text: str) -> Discountcode | None:
-    """
-    If code_text is one of our hard-coded vouchers, ensure there's a DiscountCode row.
-    Returns the DiscountCode if applicable, else None.
-    """
     pct = VOUCHER_MAP.get(code_text.upper())
     if not pct:
         return None
@@ -120,7 +184,6 @@ def _ensure_voucher_code_object(code_text: str) -> Discountcode | None:
             is_active=True,
         ),
     )
-    # If existing but inactive/expired, make it usable (dev convenience)
     changed = False
     if not obj.is_active:
         obj.is_active = True; changed = True
@@ -150,7 +213,6 @@ def _apply_discounts_spec(customer: Customer, rows, subtotal: Decimal, discount_
 
     code_text = (discount_code_input or "").strip()
     if code_text:
-        # 👉 allow our hard-coded vouchers
         maybe_voucher = _ensure_voucher_code_object(code_text)
         try:
             code = Discountcode.objects.get(discount_code=code_text.upper() if maybe_voucher else code_text, is_active=True)
@@ -177,19 +239,6 @@ def _apply_discounts_spec(customer: Customer, rows, subtotal: Decimal, discount_
 
 
 def _assign_delivery(order_id: int, delivery_postal_code: str):
-    """
-    Improved driver assignment:
-
-    - Matches delivery_person.delivery_postal_code in three formats:
-        * exact match, e.g. '62150'
-        * comma-separated list, e.g. '62150,62110'
-        * numeric range, e.g. '10001-10005'
-    - Excludes drivers who are BUSY:
-        * have a non-delivered order assigned in the last 30 minutes, OR
-        * delivered in the last 30 minutes (cooldown).
-    - If no match by area, falls back to any available & not-busy driver.
-    """
-    # ensure numeric string for range comparison; if not numeric, it's fine (handled by other predicates)
     z = ''.join(ch for ch in delivery_postal_code if ch.isdigit())
 
     sql_base = """
@@ -211,10 +260,8 @@ def _assign_delivery(order_id: int, delivery_postal_code: str):
                 FROM `Order` o2
                 WHERE o2.delivery_person_id = dp.delivery_person_id
                   AND (
-                        -- driver is currently on a job started within last 30 minutes
                         (o2.status IN ('pending','preparing','baking','ready','out_for_delivery')
                          AND o2.order_timestamp >= (NOW() - INTERVAL 30 MINUTE))
-                        -- OR just finished a job within last 30 minutes (cooldown)
                         OR (o2.status = 'delivered'
                             AND o2.actual_delivery_time IS NOT NULL
                             AND o2.actual_delivery_time >= (NOW() - INTERVAL 30 MINUTE))
@@ -251,7 +298,6 @@ def _assign_delivery(order_id: int, delivery_postal_code: str):
         row = cur.fetchone()
 
         if not row:
-            # try graceful fallback
             cur.execute(sql_fallback)
             row = cur.fetchone()
 
@@ -270,14 +316,19 @@ def _assign_delivery(order_id: int, delivery_postal_code: str):
     return dp_id
 
 
+# ----------------- Public views -----------------
+
 def menu(request):
     cart = _get_cart(request)
-    pizzas = list(Pizza.objects.filter(availability=True)[:100])
-    price_map = {v.pizza_id: v for v in Pizzapriceview.objects.filter(pizza_id__in=[p.pizza_id for p in pizzas])}
-    items = []
-    for p in pizzas:
-        v = price_map.get(p.pizza_id)
-        items.append({
+
+    pizzas_qs = list(Pizza.objects.filter(availability=True)[:100])
+    pv_map = {v.pizza_id: v for v in Pizzapriceview.objects.filter(
+        pizza_id__in=[p.pizza_id for p in pizzas_qs]
+    )}
+    pizzas = []
+    for p in pizzas_qs:
+        v = pv_map.get(p.pizza_id)
+        pizzas.append({
             "id": p.pizza_id,
             "name": (v.name if v else p.name),
             "size": p.size,
@@ -285,7 +336,16 @@ def menu(request):
             "is_vegetarian": bool(getattr(p, "is_vegetarian", False)),
             "price": (v.price_with_vat if v else p.base_price),
         })
-    return render(request, "menu.html", {"items": items, "cart_count": sum(cart.values())})
+
+    drinks = list(Drink.objects.filter(availability=True).values("drink_id", "name", "price"))
+    desserts = list(Dessert.objects.filter(availability=True).values("dessert_id", "name", "price"))
+
+    return render(request, "menu.html", {
+        "pizzas": pizzas,
+        "drinks": drinks,
+        "desserts": desserts,
+        "cart_count": sum(_get_cart(request).values()),
+    })
 
 
 def view_cart(request):
@@ -293,19 +353,42 @@ def view_cart(request):
     return render(request, "cart.html", {"rows": rows, "subtotal": subtotal})
 
 
+
 @require_POST
 def add_to_cart(request, pizza_id: int):
+    """Add pizza."""
     qty = max(1, int(request.POST.get("qty", 1)))
     cart = _get_cart(request)
-    cart[str(pizza_id)] = cart.get(str(pizza_id), 0) + qty
+    key = _cart_key("P", pizza_id)
+    cart[key] = cart.get(key, 0) + qty
     _save_cart(request, cart)
     return redirect("view_cart")
 
 
 @require_POST
-def remove_from_cart(request, pizza_id: int):
+def add_drink_to_cart(request, drink_id: int):
+    qty = max(1, int(request.POST.get("qty", 1)))
     cart = _get_cart(request)
-    cart.pop(str(pizza_id), None)
+    key = _cart_key("D", drink_id)
+    cart[key] = cart.get(key, 0) + qty
+    _save_cart(request, cart)
+    return redirect("view_cart")
+
+
+@require_POST
+def add_dessert_to_cart(request, dessert_id: int):
+    qty = max(1, int(request.POST.get("qty", 1)))
+    cart = _get_cart(request)
+    key = _cart_key("S", dessert_id)
+    cart[key] = cart.get(key, 0) + qty
+    _save_cart(request, cart)
+    return redirect("view_cart")
+
+
+@require_POST
+def remove_cart_item(request, kind: str, item_id: int):
+    cart = _get_cart(request)
+    cart.pop(_cart_key(kind.upper(), item_id), None)
     _save_cart(request, cart)
     return redirect("view_cart")
 
@@ -316,11 +399,12 @@ def clear_cart(request):
     return redirect("view_cart")
 
 
+
 @require_POST
 def checkout(request):
     cart = _get_cart(request)
     if not cart:
-        messages.warning(request, "Корзина пуста.")
+        messages.warning(request, "Cart is empty.")
         return redirect("menu")
 
     customer = _current_customer(request)
@@ -339,13 +423,30 @@ def checkout(request):
             discount_id=(code_obj.discount_id if code_obj else None),
             discount_amount=discount_amount,
         )
+
         for r in rows:
-            Orderitem.objects.create(
-                order_id=order.order_id,
-                pizza_id=r["pizza"].pizza_id,
-                pizza_quantity=r["qty"],
-                item_current_price=r["unit"],
-            )
+            if r["kind"] == "P":
+                Orderitem.objects.create(
+                    order_id=order.order_id,
+                    pizza_id=r["id"],
+                    pizza_quantity=r["qty"],
+                    item_current_price=r["unit"],
+                )
+            elif r["kind"] == "D":
+                Orderitem.objects.create(
+                    order_id=order.order_id,
+                    drink_id=r["id"],
+                    drink_quantity=r["qty"],
+                    item_current_price=r["unit"],
+                )
+            else:
+                Orderitem.objects.create(
+                    order_id=order.order_id,
+                    dessert_id=r["id"],
+                    dessert_quantity=r["qty"],
+                    item_current_price=r["unit"],
+                )
+
         if code_obj:
             Discountredemption.objects.create(
                 discount_id=code_obj.discount_id,
@@ -360,15 +461,16 @@ def checkout(request):
 
     _save_cart(request, {})
     if dp_id:
-        messages.success(request, f"Заказ №{order.order_id} создан. Скидки: {discount_amount}€")
+        messages.success(request, f"Order №{order.order_id} is created. Sale: {discount_amount}€")
     else:
-        messages.warning(request, f"Заказ №{order.order_id} создан, но курьер не найден на ближайшие 30 минут.")
+        messages.warning(request, f"Order №{order.order_id} si created, but no delivery is available, please wait.")
     return redirect("checkout_done", order_id=order.order_id)
 
 
 def checkout_done(request, order_id: int):
     order = get_object_or_404(Order, pk=order_id)
     return render(request, "checkout_done.html", {"order": order})
+
 
 
 def signup(request):
@@ -417,7 +519,7 @@ def my_orders(request):
     for o in orders:
         placed = o.order_timestamp
         if placed and not timezone.is_aware(placed):
-            placed = timezone.make_aware(placed, timezone.utc)
+            placed = timezone.make_aware(placed, timezone.get_current_timezone())
         minutes_since = (now - placed).total_seconds() / 60 if placed else 9999
         cancellable = (o.status in ("pending", "preparing")) and (minutes_since <= CANCELLATION_MINUTES)
         annotated.append((o, cancellable, max(0, int(CANCELLATION_MINUTES - minutes_since))))
@@ -436,7 +538,7 @@ def cancel_order(request, order_id: int):
     now = timezone.now()
     placed = order.order_timestamp
     if placed and not timezone.is_aware(placed):
-        placed = timezone.make_aware(placed, timezone.utc)
+        placed = timezone.make_aware(placed, timezone.get_current_timezone())
     minutes_since = (now - placed).total_seconds() / 60 if placed else 9999
     if minutes_since > CANCELLATION_MINUTES:
         messages.warning(request, f"Cancellation window ({CANCELLATION_MINUTES} min) has passed.")
@@ -448,7 +550,6 @@ def cancel_order(request, order_id: int):
     return redirect("my_orders")
 
 
-# ---------- Staff reports ----------
 def _staff_required(user):
     return user.is_authenticated and (user.is_staff or user.is_superuser)
 

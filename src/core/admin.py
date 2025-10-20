@@ -1,4 +1,3 @@
-# src/core/admin.py
 from django.contrib import admin
 from django.db import models as dj_models
 from . import models

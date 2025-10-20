@@ -1,19 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Корзина{% endblock %}
+{% block title %}Cart{% endblock %}
 {% block content %}
-<h1>Корзина</h1>
+<h1>Cart</h1>
 
 {% if rows %}
-<table class="table">
+<table class="table table-sm align-middle">
   <thead>
     <tr>
-      <th>Тип</th><th>Наименование</th><th>Размер</th><th>Кол-во</th><th>Цена (€)</th><th>Сумма (€)</th><th></th>
+      <th>Type</th><th>Name</th><th>Size</th><th>Amount</th><th>Price (€)</th><th>Sum (€)</th><th></th>
     </tr>
   </thead>
   <tbody>
   {% for r in rows %}
     <tr>
-      <td>{{ r.kind }}</td>
+      <td>
+        {% if r.kind == 'P' %}Pizza{% elif r.kind == 'D' %}Drinks{% else %}Dessert{% endif %}
+      </td>
       <td>{{ r.name }}</td>
       <td>{% if r.size %}{{ r.size }}{% else %}—{% endif %}</td>
       <td>{{ r.qty }}</td>
@@ -22,33 +24,33 @@
       <td>
         <form method="post" action="{% url 'remove_cart_item' r.kind r.id %}">
           {% csrf_token %}
-          <button class="btn btn-sm btn-outline-danger">Удалить</button>
+          <button class="btn btn-outline-danger btn-sm">Delete</button>
         </form>
       </td>
     </tr>
   {% endfor %}
   </tbody>
   <tfoot>
-    <tr><th colspan="5" class="text-end">Подытог:</th><th>{{ subtotal }}</th><th></th></tr>
+    <tr><th colspan="5" class="text-end">Total</th><th>{{ subtotal }}</th><th></th></tr>
   </tfoot>
 </table>
 
 <div class="d-flex gap-3">
   <form method="post" action="{% url 'clear_cart' %}">
     {% csrf_token %}
-    <button class="btn btn-outline-secondary">Очистить</button>
+    <button class="btn btn-outline-secondary">Delete</button>
   </form>
 
   <form method="post" action="{% url 'checkout' %}" class="d-flex gap-2">
     {% csrf_token %}
-    <input type="text" name="discount_code" placeholder="Промокод" class="form-control" style="max-width:200px">
-    <button class="btn btn-success">Оформить заказ</button>
+    <input type="text" name="discount_code" placeholder="Salecode" class="form-control" style="max-width:200px">
+    <button class="btn btn-success">Place order</button>
   </form>
 </div>
 
 {% else %}
-<p class="text-muted">Корзина пуста.</p>
+<p class="text-muted">Cart is emprty</p>
 {% endif %}
 
-<p class="mt-3"><a class="btn btn-secondary" href="{% url 'menu' %}">Назад к меню</a></p>
+<p class="mt-3"><a class="btn btn-secondary" href="{% url 'menu' %}">Back to menu</a></p>
 {% endblock %}

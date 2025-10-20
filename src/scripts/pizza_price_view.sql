@@ -1,10 +1,9 @@
--- Recreate the view so columns match core/models_view.py
 DROP VIEW IF EXISTS PizzaPriceView;
 
 CREATE VIEW PizzaPriceView AS
 SELECT
   p.pizza_id,
-  p.name AS name,          -- << IMPORTANT: expose column as "name"
+  p.name AS name,
   p.size AS size,
   ROUND(SUM(pi.quantity * i.price_per_unit), 2)               AS ingredients_cost,
   ROUND(SUM(pi.quantity * i.price_per_unit) * 1.40, 2)        AS price_no_vat,

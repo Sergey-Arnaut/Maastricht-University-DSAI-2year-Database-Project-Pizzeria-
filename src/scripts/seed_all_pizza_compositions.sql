@@ -1,9 +1,6 @@
--- seed_all_pizza_compositions.sql
--- Makes sure every pizza has ingredients so the computed price appears in PizzaPriceView.
 
 USE our_little_secret;
 
--- 1) Ensure required ingredients exist (safe upsert)
 INSERT INTO Ingredient (name, price_per_unit, vegan, vegetarian, allergen, allergen_type, amount, unit)
 VALUES
 ('Tomato Sauce',        0.50,  TRUE,  TRUE,  FALSE, NULL, '100', 'g'),
@@ -20,7 +17,6 @@ VALUES
 ('Garlic',              0.40,  TRUE,  TRUE,  FALSE, NULL, '15',   'g')
 ON DUPLICATE KEY UPDATE price_per_unit = VALUES(price_per_unit);
 
--- 2) Recreate the price view with the column names Django expects
 DROP VIEW IF EXISTS PizzaPriceView;
 CREATE VIEW PizzaPriceView AS
 SELECT
@@ -36,10 +32,7 @@ JOIN Ingredient i         ON i.ingredient_id = pi.ingredient_id
 WHERE p.availability = TRUE
 GROUP BY p.pizza_id, p.name, p.size;
 
--- 3) Helper: upsert composition rows for a (name,size,ingredient,qty) set
---    Pattern used below: select pizza_id + ingredient_id by name, safe upsert quantities.
 
--- Margherita (M)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Margherita' n,'M' s,'Tomato Sauce' ing,1.0 q UNION ALL
@@ -49,7 +42,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Pepperoni (L)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Pepperoni','L','Tomato Sauce',1.0 UNION ALL
@@ -59,7 +51,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Hawaiian (M)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Hawaiian','M','Tomato Sauce',1.0 UNION ALL
@@ -70,7 +61,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Vegetarian (L)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Vegetarian','L','Tomato Sauce',1.0 UNION ALL
@@ -83,7 +73,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Supreme (XL)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Supreme','XL','Tomato Sauce',1.0 UNION ALL
@@ -98,7 +87,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- BBQ Chicken (M)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'BBQ Chicken','M','Tomato Sauce',1.0 UNION ALL
@@ -109,7 +97,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Mushroom (S)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Mushroom','S','Tomato Sauce',1.0 UNION ALL
@@ -120,7 +107,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Four Cheese (L)  (simple stand-in: mozzarella + garlic)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Four Cheese','L','Tomato Sauce',0.5 UNION ALL
@@ -130,7 +116,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Vegan Special (M) (no dairy, veg only)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Vegan Special','M','Tomato Sauce',1.0 UNION ALL
@@ -143,7 +128,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Meat Lovers (XL)
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Meat Lovers','XL','Tomato Sauce',1.0 UNION ALL
@@ -155,7 +139,6 @@ JOIN Pizza p ON p.name=v.n AND p.size=v.s
 JOIN Ingredient i ON i.name=v.ing
 ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
--- Also give a composition to the Russian Маргарита (M) if present
 INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
 SELECT p.pizza_id, i.ingredient_id, v.q
 FROM (SELECT 'Маргарита' n,'M' s,'Tomato Sauce' ing,1.0 q UNION ALL

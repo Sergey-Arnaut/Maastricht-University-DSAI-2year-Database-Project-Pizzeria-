@@ -1,6 +1,4 @@
-"""
-ASGI config for our_little_secret project.
-"""
+
 
 import os
 from django.core.asgi import get_asgi_application

@@ -1,4 +1,3 @@
--- Добавляем все 10 тестовых заказов (первые 5 + вторые 5)
 INSERT IGNORE INTO `Order` (customer_id, status, total_price, delivery_postal_code, delivery_person_id, order_timestamp) VALUES
 (1, 'delivered', 25.99, '10001', 1, '2024-01-24 12:35:00'),
 (2, 'delivered', 18.50, '10002', 2, '2024-01-24 13:50:00'),
@@ -11,7 +10,6 @@ INSERT IGNORE INTO `Order` (customer_id, status, total_price, delivery_postal_co
 (4, 'delivered', 67.95, '10004', 1, '2024-01-25 20:15:00'),
 (5, 'delivered', 51.96, '10005', 2, '2024-01-26 19:00:00');
 
--- Добавляем все позиции заказов для всех 10 заказов
 INSERT INTO OrderItem (order_id, pizza_id, pizza_quantity, item_current_price) VALUES
 (22, 21, 2, 12.99),  -- 2x Margherita
 (22, 23, 1, 14.99),  -- 1x Hawaiian
@@ -31,7 +29,6 @@ INSERT INTO OrderItem (order_id, pizza_id, pizza_quantity, item_current_price) V
 (31, 22, 2, 15.99),  -- 2x Pepperoni
 (31, 24, 2, 16.99);  -- 2x Vegetarian
 
--- Добавляем все платежи для всех 10 заказов
 INSERT INTO Payment (order_id, amount, payment_method, status, payment_timestamp) VALUES
 (22, 25.99, 'card', 'completed', '2024-01-24 12:30:00'),
 (23, 18.50, 'cash', 'completed', '2024-01-24 13:45:00'),

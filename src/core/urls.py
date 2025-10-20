@@ -2,28 +2,24 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 
 from .views import (
-    # Menu & cart / checkout
-    menu, view_cart, add_to_cart, remove_from_cart, clear_cart,
-    checkout, checkout_done,
+    menu, view_cart, add_to_cart, add_drink_to_cart, add_dessert_to_cart,
+    remove_cart_item, clear_cart, checkout, checkout_done,
 
-    # Accounts
     signup,
 
-    # My orders
     my_orders, cancel_order,
 
-    # Staff reports
     report_undelivered, report_top3_month, report_earnings,
 )
 
 urlpatterns = [
-    # Menu
     path("", menu, name="menu"),
 
-    # Cart / checkout
     path("cart/", view_cart, name="view_cart"),
-    path("cart/add/<int:pizza_id>/", add_to_cart, name="add_to_cart"),
-    path("cart/remove/<int:pizza_id>/", remove_from_cart, name="remove_from_cart"),
+    path("cart/add/<int:pizza_id>/", add_to_cart, name="add_to_cart"),  # pizzas
+    path("cart/add/drink/<int:drink_id>/", add_drink_to_cart, name="add_drink_to_cart"),
+    path("cart/add/dessert/<int:dessert_id>/", add_dessert_to_cart, name="add_dessert_to_cart"),
+    path("cart/remove/<str:kind>/<int:item_id>/", remove_cart_item, name="remove_cart_item"),
     path("cart/clear/", clear_cart, name="clear_cart"),
     path("checkout/", checkout, name="checkout"),
     path("checkout/done/<int:order_id>/", checkout_done, name="checkout_done"),
@@ -40,15 +36,13 @@ urlpatterns = [
     ),
     path(
         "accounts/logout/",
-        auth_views.LogoutView.as_view(next_page="start"),  # back to "/" then to login/menu via start view
+        auth_views.LogoutView.as_view(next_page="menu"),
         name="logout",
     ),
 
-    # My orders
     path("orders/my/", my_orders, name="my_orders"),
     path("orders/cancel/<int:order_id>/", cancel_order, name="cancel_order"),
 
-    # Staff reports
     path("reports/undelivered/", report_undelivered, name="report_undelivered"),
     path("reports/top3-month/", report_top3_month, name="report_top3_month"),
     path("reports/earnings/", report_earnings, name="report_earnings"),

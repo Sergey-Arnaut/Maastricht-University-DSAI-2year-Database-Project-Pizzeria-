@@ -1,4 +1,3 @@
--- views.sql — expose the exact column names Django expects
 DROP VIEW IF EXISTS PizzaPriceView;
 
 CREATE VIEW PizzaPriceView AS

@@ -1,6 +1,5 @@
 -- insert_sample_data.sql
 
--- Заполнение таблицы Pizza (исправленная версия)
 INSERT IGNORE INTO Pizza (name, size, availability, image_url, base_price) VALUES
 ('Margherita', 'M', TRUE, NULL, 12.99),
 ('Pepperoni', 'L', TRUE, NULL, 15.99),

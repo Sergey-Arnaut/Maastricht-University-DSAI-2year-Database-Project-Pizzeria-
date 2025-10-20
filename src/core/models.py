@@ -1,7 +1,3 @@
-# src/core/models.py
-# Cleaned models: no Pizzapriceview here (it lives in core/models_view.py)
-# All foreign keys have explicit on_delete, CompositePrimaryKey removed,
-# db_table names preserved, managed=False kept to match existing DB.
 
 from django.db import models
 

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Заказ оформлен{% endblock %}
+{% block title %}Order has been placed{% endblock %}
 {% block content %}
-<h1>Спасибо! Заказ №{{ order.order_id }} создан.</h1>
-<p>Статус: {{ order.status }}</p>
+<h1>Thanks! order№{{ order.order_id }} has been created.</h1>
+<p>Status {{ order.status }}</p>
 {% if order.delivery_person_id %}
-  <p>Курьер: #{{ order.delivery_person_id }} назначен.</p>
+  <p>Delivery Guy  #{{ order.delivery_person_id }} appointed</p>
 {% else %}
-  <p class="text-warning">Курьер не найден (нет доступных ближайшие 30 минут).</p>
+  <p class="text-warning">Delivery is not found (no free in 30 minutes).</p>
 {% endif %}
-<a class="btn btn-primary" href="{% url 'menu' %}">Назад к меню</a>
+<a class="btn btn-primary" href="{% url 'menu' %}">Back to menu</a>
 {% endblock %}
