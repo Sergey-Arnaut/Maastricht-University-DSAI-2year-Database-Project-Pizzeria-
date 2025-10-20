@@ -1,7 +1,7 @@
 import mysql.connector
 import os
 
-# Настройки подключения к БД
+#Settings for connecting to the db
 db_config = {
     'host': 'mysql-bccc7a6-sergey-1c63.h.aivencloud.com',
     'user': 'lena',
@@ -17,35 +17,34 @@ def create_connection():
     """Создает соединение с базой данных"""
     try:
         conn = mysql.connector.connect(**db_config)
-        print("✅ Successful connection to database!")
+        print("Successful connection to db:))")
         return conn
     except mysql.connector.Error as e:
-        print(f"❌ Mistake with connection to MySQL: {e}")
+        print(f"Mistake with connection to db: {e}")
         return None
 
 
 def run_sql_file(conn, filename):
-    """Запускает SQL-скрипт из файла"""
+    """Run the sql script"""
     try:
         cursor = conn.cursor()
         with open(filename, "r", encoding="utf-8") as f:
             sql_script = f.read()
 
-        # Выполняем все команды по очереди
         for statement in sql_script.split(";"):
             stmt = statement.strip()
             if stmt:
                 cursor.execute(stmt)
 
         conn.commit()
-        print(f"✅ SQL file '{filename}' executed successfully!")
+        print(f"file '{filename}' is executed successfully")
 
     except Exception as e:
-        print(f"❌ Error executing SQL file '{filename}': {e}")
+        print(f"Error with '{filename}': {e}")
 
 
 def create_pizza_price_view(conn):
-    """Создает представление для расчета цен пицц"""
+    """Creates view for pizza price"""
     try:
         cursor = conn.cursor()
 
@@ -67,20 +66,19 @@ def create_pizza_price_view(conn):
 
         cursor.execute(view_sql)
         conn.commit()
-        print("✅ Pizza price view created successfully!")
+        print("Success")
         return True
 
     except mysql.connector.Error as e:
-        print(f"❌ Error creating pizza price view: {e}")
+        print(f"Error with: {e}")
         return False
 
 
 def retrieve_menu_data(conn):
-    """Извлекает данные меню из представления"""
     try:
         cursor = conn.cursor(dictionary=True)
 
-        print("\n🍕 RETRIEVING MENU DATA")
+        print("\nMenu")
         print("=" * 50)
 
         cursor.execute("SELECT * FROM PizzaPriceView;")
@@ -92,12 +90,11 @@ def retrieve_menu_data(conn):
         return rows
 
     except mysql.connector.Error as e:
-        print(f"❌ Error retrieving menu data: {e}")
+        print(f"Error with: {e}")
         return []
 
 
 def get_undelivered_orders(conn):
-    """Получает не доставленные заказы"""
     try:
         cursor = conn.cursor(dictionary=True)
 
@@ -122,25 +119,16 @@ def get_undelivered_orders(conn):
         cursor.execute(query)
         results = cursor.fetchall()
 
-        print("\n🚫 UNDELIVERED ORDERS")
+        print("\nUndelivered orders")
         print("=" * 60)
 
         if not results:
-            print("✅ All orders have been delivered or cancelled!")
+            print("All orders have been delivered/cancelled")
             return []
 
         for row in results:
-            status_emoji = {
-                'pending': '⏳',
-                'preparing': '👨‍🍳',
-                'baking': '🔥',
-                'ready': '✅',
-                'out_for_delivery': '🚗'
-            }.get(row['status'], '❓')
-
-            print(f"Order #{row['order_id']} {status_emoji}")
+            print(f"Order #{row['order_id']} - Status: {row['status']}")
             print(f"   Customer: {row['first_name']} {row['last_name']}")
-            print(f"   Status: {row['status']}")
             print(f"   Ordered: {row['order_timestamp']}")
             print(f"   Total: {row['total_price']} EUR")
             print(f"   Delivery to: {row['delivery_postal_code']}")
