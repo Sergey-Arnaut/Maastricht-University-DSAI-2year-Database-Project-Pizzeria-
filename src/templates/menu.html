@@ -1,10 +1,12 @@
 {% extends "base.html" %}
-{% load static %}
 {% block title %}Меню{% endblock %}
 
 {% block content %}
+<h1 class="mb-3">Меню</h1>
+
+<h3 class="mt-4">Пиццы</h3>
 <div class="row g-3">
-  {% for x in items %}
+  {% for x in pizzas %}
     <div class="col-md-6">
       <div class="card shadow-sm">
         <div class="card-body">
@@ -15,29 +17,67 @@
           </h5>
 
           {% if x.price %}
-            <p>Цена: <strong>{{ x.price }}</strong></p>
+            <p>Цена: <strong>{{ x.price }}</strong> €</p>
+            <form method="post" action="{% url 'add_pizza_to_cart' x.id %}" class="mt-2">
+              {% csrf_token %}
+              <input type="number" name="qty" min="1" value="1" style="width:80px">
+              <button class="btn btn-danger btn-sm">В корзину</button>
+            </form>
           {% else %}
             <p class="text-muted">Нет состава — цена не рассчитана</p>
+            <button class="btn btn-secondary btn-sm" disabled>В корзину</button>
           {% endif %}
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <p class="text-muted">Пиццы недоступны.</p>
+  {% endfor %}
+</div>
 
-          <!-- ВАЖНО: форма внутри цикла, используем x.id -->
-          <form method="post" action="{% url 'add_to_cart' x.id %}" class="mt-2">
+<h3 class="mt-4">Напитки</h3>
+<div class="row g-3">
+  {% for d in drinks %}
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">{{ d.name }}</h5>
+          <p>Цена: <strong>{{ d.price }}</strong> €</p>
+          <form method="post" action="{% url 'add_drink_to_cart' d.id %}" class="mt-2">
             {% csrf_token %}
             <input type="number" name="qty" min="1" value="1" style="width:80px">
-            <button class="btn btn-danger btn-sm">В корзину</button>
+            <button class="btn btn-outline-primary btn-sm">В корзину</button>
           </form>
         </div>
       </div>
     </div>
   {% empty %}
-    <p>Меню пусто.</p>
+    <p class="text-muted">Напитки недоступны.</p>
   {% endfor %}
 </div>
-<p class="mt-3">
-  <a class="btn btn-outline-primary" href="{% url 'view_cart' %}">Перейти в корзину</a>
-</p>
-<p class="mt-3">
-  <a class="btn btn-outline-primary" href="{% url 'view_cart' %}">Перейти в корзину</a>
-</p>
 
+<h3 class="mt-4">Десерты</h3>
+<div class="row g-3">
+  {% for ds in desserts %}
+    <div class="col-md-4">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">{{ ds.name }}</h5>
+          <p>Цена: <strong>{{ ds.price }}</strong> €</p>
+          <form method="post" action="{% url 'add_dessert_to_cart' ds.id %}" class="mt-2">
+            {% csrf_token %}
+            <input type="number" name="qty" min="1" value="1" style="width:80px">
+            <button class="btn btn-outline-success btn-sm">В корзину</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <p class="text-muted">Десерты недоступны.</p>
+  {% endfor %}
+</div>
+
+<p class="mt-4">
+  <a class="btn btn-outline-primary" href="{% url 'view_cart' %}">Перейти в корзину</a>
+</p>
 {% endblock %}

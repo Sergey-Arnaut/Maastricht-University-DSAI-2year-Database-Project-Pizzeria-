@@ -131,6 +131,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"     # для prod (collectstatic)
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-LOGIN_URL = "login"          # where @login_required sends you if not logged in
-LOGIN_REDIRECT_URL = "menu"  # where to go right after login
-LOGOUT_REDIRECT_URL = "start"  # after logout → starting page ("/" = login)
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "menu"
+LOGOUT_REDIRECT_URL = "login"
+  # after logout → starting page ("/" = login)

@@ -1,4 +1,3 @@
-# src/core/views.py
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 
@@ -27,12 +26,15 @@ VOUCHER_MAP = {
     "SEREJA": 25,    # 25% off
 }
 
+
 def _get_cart(request):
     return request.session.get("cart", {})
+
 
 def _save_cart(request, cart):
     request.session["cart"] = cart
     request.session.modified = True
+
 
 def _current_customer(request) -> Customer:
     if not request.user.is_authenticated:
@@ -54,6 +56,7 @@ def _current_customer(request) -> Customer:
         cust.save(update_fields=["first_name", "last_name"])
     return cust
 
+
 def _fetch_cart_rows(cart: dict):
     if not cart:
         return [], Decimal("0.00")
@@ -72,6 +75,7 @@ def _fetch_cart_rows(cart: dict):
         subtotal += line
     return rows, subtotal.quantize(Decimal("0.01"))
 
+
 def _customer_total_pizzas(customer_id: int) -> int:
     with connection.cursor() as cur:
         cur.execute("""
@@ -84,6 +88,7 @@ def _customer_total_pizzas(customer_id: int) -> int:
         row = cur.fetchone()
     return int(row[0] or 0)
 
+
 def _birthday_freebies_discount(order_rows, drinks_qs):
     discount = Decimal("0.00")
     if order_rows:
@@ -93,6 +98,7 @@ def _birthday_freebies_discount(order_rows, drinks_qs):
     if d:
         discount += Decimal(d.price or 0)
     return discount.quantize(Decimal("0.01"))
+
 
 def _ensure_voucher_code_object(code_text: str) -> Discountcode | None:
     """
@@ -123,6 +129,7 @@ def _ensure_voucher_code_object(code_text: str) -> Discountcode | None:
     if changed:
         obj.save(update_fields=["is_active", "valid_until"])
     return obj
+
 
 def _apply_discounts_spec(customer: Customer, rows, subtotal: Decimal, discount_code_input: str):
     applied = {}
@@ -168,24 +175,85 @@ def _apply_discounts_spec(customer: Customer, rows, subtotal: Decimal, discount_
         total = Decimal("0.00")
     return total.quantize(Decimal("0.01")), discount_total.quantize(Decimal("0.01")), applied, code_obj
 
+
 def _assign_delivery(order_id: int, delivery_postal_code: str):
+    """
+    Improved driver assignment:
+
+    - Matches delivery_person.delivery_postal_code in three formats:
+        * exact match, e.g. '62150'
+        * comma-separated list, e.g. '62150,62110'
+        * numeric range, e.g. '10001-10005'
+    - Excludes drivers who are BUSY:
+        * have a non-delivered order assigned in the last 30 minutes, OR
+        * delivered in the last 30 minutes (cooldown).
+    - If no match by area, falls back to any available & not-busy driver.
+    """
+    # ensure numeric string for range comparison; if not numeric, it's fine (handled by other predicates)
+    z = ''.join(ch for ch in delivery_postal_code if ch.isdigit())
+
+    sql_base = """
+        SELECT dp.delivery_person_id
+        FROM DeliveryPerson dp
+        WHERE dp.availability = TRUE
+          AND (
+                dp.delivery_postal_code = %(pc)s
+             OR FIND_IN_SET(%(pc)s, dp.delivery_postal_code)
+             OR (
+                    dp.delivery_postal_code LIKE '%%-%%'
+                AND CAST(%(pc_num)s AS UNSIGNED) BETWEEN
+                    CAST(SUBSTRING_INDEX(dp.delivery_postal_code,'-',1) AS UNSIGNED)
+                AND CAST(SUBSTRING_INDEX(dp.delivery_postal_code,'-',-1) AS UNSIGNED)
+             )
+          )
+          AND NOT EXISTS (
+                SELECT 1
+                FROM `Order` o2
+                WHERE o2.delivery_person_id = dp.delivery_person_id
+                  AND (
+                        -- driver is currently on a job started within last 30 minutes
+                        (o2.status IN ('pending','preparing','baking','ready','out_for_delivery')
+                         AND o2.order_timestamp >= (NOW() - INTERVAL 30 MINUTE))
+                        -- OR just finished a job within last 30 minutes (cooldown)
+                        OR (o2.status = 'delivered'
+                            AND o2.actual_delivery_time IS NOT NULL
+                            AND o2.actual_delivery_time >= (NOW() - INTERVAL 30 MINUTE))
+                      )
+          )
+        ORDER BY dp.number_of_orders ASC, dp.rating DESC
+        LIMIT 1
+    """
+
+    sql_fallback = """
+        SELECT dp.delivery_person_id
+        FROM DeliveryPerson dp
+        WHERE dp.availability = TRUE
+          AND NOT EXISTS (
+                SELECT 1
+                FROM `Order` o2
+                WHERE o2.delivery_person_id = dp.delivery_person_id
+                  AND (
+                        (o2.status IN ('pending','preparing','baking','ready','out_for_delivery')
+                         AND o2.order_timestamp >= (NOW() - INTERVAL 30 MINUTE))
+                        OR (o2.status = 'delivered'
+                            AND o2.actual_delivery_time IS NOT NULL
+                            AND o2.actual_delivery_time >= (NOW() - INTERVAL 30 MINUTE))
+                      )
+          )
+        ORDER BY dp.number_of_orders ASC, dp.rating DESC
+        LIMIT 1
+    """
+
+    params = {"pc": delivery_postal_code, "pc_num": z or "0"}
+
     with connection.cursor() as cur:
-        cur.execute("""
-            SELECT dp.delivery_person_id
-            FROM DeliveryPerson dp
-            WHERE dp.availability = TRUE
-              AND dp.delivery_postal_code = %s
-              AND NOT EXISTS (
-                    SELECT 1
-                    FROM `Order` o2
-                    WHERE o2.delivery_person_id = dp.delivery_person_id
-                      AND o2.status = 'delivered'
-                      AND o2.actual_delivery_time >= (NOW() - INTERVAL 30 MINUTE)
-              )
-            ORDER BY dp.number_of_orders ASC, dp.rating DESC
-            LIMIT 1
-        """, [delivery_postal_code])
+        cur.execute(sql_base, params)
         row = cur.fetchone()
+
+        if not row:
+            # try graceful fallback
+            cur.execute(sql_fallback)
+            row = cur.fetchone()
 
     if not row:
         return None
@@ -194,9 +262,13 @@ def _assign_delivery(order_id: int, delivery_postal_code: str):
     with transaction.atomic():
         with connection.cursor() as cur:
             cur.execute("UPDATE `Order` SET delivery_person_id=%s WHERE order_id=%s", [dp_id, order_id])
-            cur.execute("UPDATE DeliveryPerson SET number_of_orders = number_of_orders + 1 WHERE delivery_person_id=%s",
-                        [dp_id])
+            cur.execute("""
+                UPDATE DeliveryPerson
+                   SET number_of_orders = COALESCE(number_of_orders,0) + 1
+                 WHERE delivery_person_id=%s
+            """, [dp_id])
     return dp_id
+
 
 def menu(request):
     cart = _get_cart(request)
@@ -215,9 +287,11 @@ def menu(request):
         })
     return render(request, "menu.html", {"items": items, "cart_count": sum(cart.values())})
 
+
 def view_cart(request):
     rows, subtotal = _fetch_cart_rows(_get_cart(request))
     return render(request, "cart.html", {"rows": rows, "subtotal": subtotal})
+
 
 @require_POST
 def add_to_cart(request, pizza_id: int):
@@ -227,6 +301,7 @@ def add_to_cart(request, pizza_id: int):
     _save_cart(request, cart)
     return redirect("view_cart")
 
+
 @require_POST
 def remove_from_cart(request, pizza_id: int):
     cart = _get_cart(request)
@@ -234,10 +309,12 @@ def remove_from_cart(request, pizza_id: int):
     _save_cart(request, cart)
     return redirect("view_cart")
 
+
 @require_POST
 def clear_cart(request):
     _save_cart(request, {})
     return redirect("view_cart")
+
 
 @require_POST
 def checkout(request):
@@ -288,9 +365,11 @@ def checkout(request):
         messages.warning(request, f"Заказ №{order.order_id} создан, но курьер не найден на ближайшие 30 минут.")
     return redirect("checkout_done", order_id=order.order_id)
 
+
 def checkout_done(request, order_id: int):
     order = get_object_or_404(Order, pk=order_id)
     return render(request, "checkout_done.html", {"order": order})
+
 
 def signup(request):
     if request.method == "POST":
@@ -328,6 +407,7 @@ def signup(request):
         form = SignUpForm()
     return render(request, "registration/signup.html", {"form": form})
 
+
 @login_required
 def my_orders(request):
     cust = _current_customer(request)
@@ -342,6 +422,7 @@ def my_orders(request):
         cancellable = (o.status in ("pending", "preparing")) and (minutes_since <= CANCELLATION_MINUTES)
         annotated.append((o, cancellable, max(0, int(CANCELLATION_MINUTES - minutes_since))))
     return render(request, "orders/my_orders.html", {"orders": annotated, "cancel_window": CANCELLATION_MINUTES})
+
 
 @login_required
 @require_POST
@@ -366,14 +447,17 @@ def cancel_order(request, order_id: int):
     messages.success(request, f"Order #{order.order_id} cancelled.")
     return redirect("my_orders")
 
-# ---------- Staff reports (unchanged from previous message) ----------
+
+# ---------- Staff reports ----------
 def _staff_required(user):
     return user.is_authenticated and (user.is_staff or user.is_superuser)
+
 
 @user_passes_test(_staff_required)
 def report_undelivered(request):
     orders = Order.objects.exclude(status__in=["delivered", "cancelled"]).order_by("-order_timestamp")[:300]
     return render(request, "reports/undelivered.html", {"orders": orders})
+
 
 @user_passes_test(_staff_required)
 def report_top3_month(request):
@@ -390,6 +474,7 @@ def report_top3_month(request):
         .order_by("-total")[:3]
     )
     return render(request, "reports/top3_month.html", {"rows": qs, "since": cutoff})
+
 
 @user_passes_test(_staff_required)
 def report_earnings(request):

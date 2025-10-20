@@ -5,17 +5,22 @@
 
 {% if rows %}
 <table class="table">
-  <thead><tr><th>Пицца</th><th>Размер</th><th>Кол-во</th><th>Цена</th><th>Сумма</th><th></th></tr></thead>
+  <thead>
+    <tr>
+      <th>Тип</th><th>Наименование</th><th>Размер</th><th>Кол-во</th><th>Цена (€)</th><th>Сумма (€)</th><th></th>
+    </tr>
+  </thead>
   <tbody>
   {% for r in rows %}
     <tr>
-      <td>{{ r.pizza.name }}</td>
-      <td>{{ r.pizza.size }}</td>
+      <td>{{ r.kind }}</td>
+      <td>{{ r.name }}</td>
+      <td>{% if r.size %}{{ r.size }}{% else %}—{% endif %}</td>
       <td>{{ r.qty }}</td>
       <td>{{ r.unit }}</td>
       <td>{{ r.sum }}</td>
       <td>
-        <form method="post" action="{% url 'remove_from_cart' r.pizza.pizza_id %}">
+        <form method="post" action="{% url 'remove_cart_item' r.kind r.id %}">
           {% csrf_token %}
           <button class="btn btn-sm btn-outline-danger">Удалить</button>
         </form>
@@ -24,7 +29,7 @@
   {% endfor %}
   </tbody>
   <tfoot>
-    <tr><th colspan="4" class="text-end">Подытог:</th><th>{{ subtotal }}</th><th></th></tr>
+    <tr><th colspan="5" class="text-end">Подытог:</th><th>{{ subtotal }}</th><th></th></tr>
   </tfoot>
 </table>
 

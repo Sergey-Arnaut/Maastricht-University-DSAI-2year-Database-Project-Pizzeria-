@@ -1,0 +1,117 @@
+-- sample_compositions.sql — add or update compositions for all English-named pizzas
+
+-- Margherita (M)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Margherita' n,'M' s,'Tomato Sauce' ing,1.0 q UNION ALL
+      SELECT 'Margherita','M','Mozzarella Cheese',2.0 UNION ALL
+      SELECT 'Margherita','M','Basil',0.2) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- Pepperoni (L)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Pepperoni','L','Tomato Sauce',1.0 UNION ALL
+      SELECT 'Pepperoni','L','Mozzarella Cheese',2.0 UNION ALL
+      SELECT 'Pepperoni','L','Pepperoni',1.0) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- Hawaiian (M)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Hawaiian','M','Tomato Sauce',1.0 UNION ALL
+      SELECT 'Hawaiian','M','Mozzarella Cheese',2.0 UNION ALL
+      SELECT 'Hawaiian','M','Ham',1.0 UNION ALL
+      SELECT 'Hawaiian','M','Pineapple',1.0) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- Vegetarian (L)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Vegetarian','L','Tomato Sauce',1.0 UNION ALL
+      SELECT 'Vegetarian','L','Mozzarella Cheese',2.0 UNION ALL
+      SELECT 'Vegetarian','L','Mushrooms',1.0 UNION ALL
+      SELECT 'Vegetarian','L','Bell Peppers',1.0 UNION ALL
+      SELECT 'Vegetarian','L','Onions',0.7 UNION ALL
+      SELECT 'Vegetarian','L','Olives',0.6) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- Supreme (XL)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Supreme','XL','Tomato Sauce',1.0 UNION ALL
+      SELECT 'Supreme','XL','Mozzarella Cheese',2.0 UNION ALL
+      SELECT 'Supreme','XL','Pepperoni',0.8 UNION ALL
+      SELECT 'Supreme','XL','Ham',0.8 UNION ALL
+      SELECT 'Supreme','XL','Mushrooms',1.0 UNION ALL
+      SELECT 'Supreme','XL','Bell Peppers',1.0 UNION ALL
+      SELECT 'Supreme','XL','Onions',0.7 UNION ALL
+      SELECT 'Supreme','XL','Olives',0.6) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- BBQ Chicken (M)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'BBQ Chicken','M','Tomato Sauce',1.0 UNION ALL
+      SELECT 'BBQ Chicken','M','Mozzarella Cheese',2.0 UNION ALL
+      SELECT 'BBQ Chicken','M','Chicken',1.0 UNION ALL
+      SELECT 'BBQ Chicken','M','Onions',0.7) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- Mushroom (S)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Mushroom','S','Tomato Sauce',1.0 UNION ALL
+      SELECT 'Mushroom','S','Mozzarella Cheese',1.5 UNION ALL
+      SELECT 'Mushroom','S','Mushrooms',1.2 UNION ALL
+      SELECT 'Mushroom','S','Garlic',0.2) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- Four Cheese (L)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Four Cheese','L','Tomato Sauce',0.5 UNION ALL
+      SELECT 'Four Cheese','L','Mozzarella Cheese',2.5 UNION ALL
+      SELECT 'Four Cheese','L','Garlic',0.2) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- Vegan Special (M)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Vegan Special','M','Tomato Sauce',1.0 UNION ALL
+      SELECT 'Vegan Special','M','Mushrooms',1.0 UNION ALL
+      SELECT 'Vegan Special','M','Bell Peppers',1.0 UNION ALL
+      SELECT 'Vegan Special','M','Onions',0.7 UNION ALL
+      SELECT 'Vegan Special','M','Olives',0.6 UNION ALL
+      SELECT 'Vegan Special','M','Basil',0.2) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
+
+-- Meat Lovers (XL)
+INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+SELECT p.pizza_id, i.ingredient_id, v.q
+FROM (SELECT 'Meat Lovers','XL','Tomato Sauce',1.0 UNION ALL
+      SELECT 'Meat Lovers','XL','Mozzarella Cheese',2.0 UNION ALL
+      SELECT 'Meat Lovers','XL','Pepperoni',1.0 UNION ALL
+      SELECT 'Meat Lovers','XL','Ham',1.0 UNION ALL
+      SELECT 'Meat Lovers','XL','Chicken',1.0) v
+JOIN Pizza p ON p.name=v.n AND p.size=v.s
+JOIN Ingredient i ON i.name=v.ing
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
