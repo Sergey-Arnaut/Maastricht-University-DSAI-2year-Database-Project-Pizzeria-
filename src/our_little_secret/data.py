@@ -138,10 +138,10 @@ def get_undelivered_orders(conn):
         return results
 
     except mysql.connector.Error as e:
-        print(f"❌ Error retrieving undelivered orders: {e}")
+        print(f"Error retrieving undelivered orders: {e}")
         return []
+
 def get_delivery_earnings_by_gender(conn):
-    """Анализ заработков доставщиков по полу"""
     try:
         cursor = conn.cursor(dictionary=True)
 
@@ -186,10 +186,10 @@ def get_delivery_earnings_by_gender(conn):
         return []
 
     except mysql.connector.Error as e:
-        print(f"❌ Error retrieving earnings by gender: {e}")
+        print(f"Error retrieving earnings by gender: {e}")
         return []
+
 def get_delivery_earnings_by_age(conn):
-    """Анализ заработков доставщиков по возрасту"""
     try:
         cursor = conn.cursor(dictionary=True)
 
@@ -230,8 +230,8 @@ def get_delivery_earnings_by_age(conn):
     except mysql.connector.Error as e:
         print(f"Error retrieving delivery earnings by age: {e}")
         return []
+
 def get_delivery_earnings_by_postal_code(conn):
-    """Анализ заработков доставщиков по почтовому индексу"""
     try:
         cursor = conn.cursor(dictionary=True)
 
@@ -273,26 +273,23 @@ def get_delivery_earnings_by_postal_code(conn):
         print(f"Error retrieving delivery earnings by postal code: {e}")
         return []
 
-
+#Transaction mechanism + rollback in case of error
 def place_order_transaction(conn, customer_id, order_items, delivery_postal_code, discount_id=None):
-    """
-    Размещает заказ в транзакции с откатом при ошибках
-    """
     cursor = None
     try:
-        # Начинаем транзакцию
+        #Start of transaction
         conn.start_transaction()
         cursor = conn.cursor(dictionary=True)
 
-        print("🔄 Starting order transaction...")
+        print("Start of the order transaction")
 
-        # 1. Проверяем существование клиента
+        #Check whether the client exists
         cursor.execute("SELECT customer_id FROM Customer WHERE customer_id = %s", (customer_id,))
         customer = cursor.fetchone()
         if not customer:
             raise Exception(f"Customer with ID {customer_id} not found")
 
-        # 2. Рассчитываем общую стоимость
+        #Compute the total price
         total_price = 0
         discount_amount = 0
 
@@ -321,7 +318,7 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
                     raise Exception(f"Dessert with ID {item['dessert_id']} not available")
                 total_price += dessert['price'] * item.get('quantity', 1)
 
-        # 3. Применяем скидку если указана
+        #Apply the discount (if needed)
         if discount_id:
             cursor.execute("""
                 SELECT discount_value, discount_type 
@@ -337,9 +334,9 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
                     discount_amount = min(discount['discount_value'], total_price)
                 total_price = max(0, total_price - discount_amount)
             else:
-                discount_id = None  # Скидка не действительна
+                discount_id = None  #Discount unavailable
 
-        # 4. Создаем заказ
+        #Placing the order
         insert_order_sql = """
         INSERT INTO `Order` (customer_id, total_price, delivery_postal_code, discount_id, discount_amount, status)
         VALUES (%s, %s, %s, %s, %s, 'pending')
@@ -347,9 +344,9 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
         cursor.execute(insert_order_sql, (customer_id, total_price, delivery_postal_code, discount_id, discount_amount))
         order_id = cursor.lastrowid
 
-        print(f"✅ Order #{order_id} created")
+        print(f"Order #{order_id} created")
 
-        # 5. Добавляем элементы заказа
+        #Adding the order items
         for item in order_items:
             if 'pizza_id' in item and item['pizza_id']:
                 cursor.execute("SELECT base_price FROM Pizza WHERE pizza_id = %s", (item['pizza_id'],))
@@ -380,9 +377,9 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
                 cursor.execute(insert_item_sql,
                                (order_id, item['dessert_id'], item.get('quantity', 1), dessert['price']))
 
-        print(f"✅ Added {len(order_items)} items to order")
+        print(f"Added {len(order_items)} items to order")
 
-        # 6. Создаем платеж
+        #Creating the payment
         insert_payment_sql = """
         INSERT INTO Payment (order_id, amount, payment_method, status)
         VALUES (%s, %s, 'card', 'pending')
@@ -390,36 +387,36 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
         cursor.execute(insert_payment_sql, (order_id, total_price))
         payment_id = cursor.lastrowid
 
-        # Обновляем заказ с payment_id
+        #Update the payment
         cursor.execute("UPDATE `Order` SET payment_id = %s WHERE order_id = %s", (payment_id, order_id))
 
-        print(f"✅ Payment #{payment_id} created")
+        print(f"Payment #{payment_id} created")
 
-        # 7. Если использовалась скидка, отмечаем использование
+        #Mark used discount
         if discount_id:
             insert_redemption_sql = """
             INSERT INTO DiscountRedemption (discount_id, customer_id, order_id)
             VALUES (%s, %s, %s)
             """
             cursor.execute(insert_redemption_sql, (discount_id, customer_id, order_id))
-            print("✅ Discount applied and recorded")
+            print("Discount applied and marked")
 
-        # Подтверждаем транзакцию
+        #Confirm the transaction
         conn.commit()
-        print(f"🎉 ORDER #{order_id} SUCCESSFULLY PLACED!")
-        print(f"   Total: {total_price:.2f} EUR")
-        print(f"   Discount: {discount_amount:.2f} EUR")
+        print(f"ORDER #{order_id} SUCCESSFULLY PLACED")
+        print(f"   Total: {total_price:.2f} euro")
+        print(f"   Discount: {discount_amount:.2f} euro")
         print(f"   Delivery to: {delivery_postal_code}")
 
         return order_id
 
     except Exception as e:
-        # ОТКАТ ТРАНЗАКЦИИ при ошибке
-        print(f"❌ ERROR: {e}")
-        print("🔄 Rolling back transaction...")
+        #Rollback in case of error
+        print(f"Error: {e}")
+        print("Rolling back transaction")
         if conn:
             conn.rollback()
-        print("✅ Transaction rolled back successfully")
+        print("Transaction rolled back successfully")
         return None
 
     finally:
@@ -428,14 +425,13 @@ def place_order_transaction(conn, customer_id, order_items, delivery_postal_code
 
 
 def test_vegetarian_pizza_constraint(conn):
-    """Тестирует ограничение на невегетарианские ингредиенты в вегетарианских пиццах"""
-    print("\n🥦 TESTING VEGETARIAN PIZZA CONSTRAINT")
+    print("\n TESTING VEGETARIAN/VEGAN PIZZA CONSTRAINT")
     print("=" * 50)
 
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # Находим вегетарианскую пиццу
+        #Find the vegan/vegetarian pizza
         cursor.execute("""
             SELECT pizza_id, name 
             FROM Pizza 
@@ -448,7 +444,7 @@ def test_vegetarian_pizza_constraint(conn):
             print("❌ No vegetarian pizzas found for testing")
             return False
 
-        # Находим невегетарианский ингредиент
+        #Find the ingredient
         cursor.execute("""
             SELECT ingredient_id, name 
             FROM Ingredient 
@@ -464,33 +460,32 @@ def test_vegetarian_pizza_constraint(conn):
         print(
             f"Testing: Add non-vegetarian '{non_veg_ingredient['name']}' to vegetarian pizza '{vegetarian_pizza['name']}'")
 
-        # Пытаемся добавить невегетарианский ингредиент к вегетарианской пицце
+        #Trying to add the ingredient
         cursor.execute("""
             INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
             VALUES (%s, %s, 1.0)
         """, (vegetarian_pizza['pizza_id'], non_veg_ingredient['ingredient_id']))
 
         conn.commit()
-        print("❌ CONSTRAINT FAILED: Should not allow non-vegetarian ingredients in vegetarian pizza")
+        print("!!!CONSTRAINT FAILED: Should not allow non vegetarian ingredients in vegetarian pizza")
         return False
 
     except mysql.connector.Error as e:
         conn.rollback()
-        print(f"✅ CONSTRAINT WORKING: {e}")
+        print(f"CONSTRAINT WORKING: {e}")
         return True
     finally:
         cursor.close()
 
 
 def test_discount_code_reuse(conn):
-    """Тестирует ограничение на повторное использование кодов скидок"""
-    print("\n🎫 TESTING DISCOUNT CODE REUSE CONSTRAINT")
+    print("\n TESTING DISCOUNT CODE REUSE CONSTRAINT")
     print("=" * 50)
 
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # Находим использованный discount code
+        #Find used discount code
         cursor.execute("""
             SELECT dr.discount_id, dr.order_id, dr.customer_id
             FROM DiscountRedemption dr
@@ -499,8 +494,8 @@ def test_discount_code_reuse(conn):
         used_discount = cursor.fetchone()
 
         if not used_discount:
-            print("ℹ️ No used discount codes found, testing with new scenario")
-            # Создаем тестовый сценарий
+            print("No used discount codes found, testing with new scenario")
+            #Create test case
             cursor.execute("""
                 INSERT INTO DiscountCode (discount_code, discount_value, discount_type, is_active)
                 VALUES ('TEST_REUSE', 10, 'value', TRUE)
@@ -516,55 +511,52 @@ def test_discount_code_reuse(conn):
 
         print(f"Testing: Reuse discount code #{used_discount['discount_id']} for order #{used_discount['order_id']}")
 
-        # Пытаемся использовать тот же discount code для того же заказа
+        # Retry the discount code
         cursor.execute("""
             INSERT INTO DiscountRedemption (discount_id, customer_id, order_id)
             VALUES (%s, %s, %s)
         """, (used_discount['discount_id'], used_discount['customer_id'], used_discount['order_id']))
 
         conn.commit()
-        print("❌ CONSTRAINT FAILED: Should not allow discount code reuse for same order")
+        print("!!!CONSTRAINT FAILED: Should not allow discount code reuse for same order")
         return False
 
     except mysql.connector.Error as e:
         conn.rollback()
-        print(f"✅ CONSTRAINT WORKING: {e}")
+        print(f"CONSTRAINT WORKING: {e}")
         return True
     finally:
         cursor.close()
 
 
 def test_negative_ingredient_price(conn):
-    """Тестирует ограничение на отрицательные цены ингредиентов"""
-    print("\n💰 TESTING NEGATIVE INGREDIENT PRICE CONSTRAINT")
+    print("\nTESTING NEGATIVE INGREDIENT PRICE CONSTRAINT")
     print("=" * 50)
 
     cursor = conn.cursor(dictionary=True)
 
     try:
-        print("Testing: Insert ingredient with negative price")
+        print("Test - Insert ingredient with negative price")
 
-        # Пытаемся создать ингредиент с отрицательной ценой
         cursor.execute("""
             INSERT INTO Ingredient (name, price_per_unit, vegan, vegetarian, allergen)
             VALUES ('Test Negative Price Ingredient', -5.00, TRUE, TRUE, FALSE)
         """)
 
         conn.commit()
-        print("❌ CONSTRAINT FAILED: Should not allow negative ingredient prices")
+        print("!!!CONSTRAINT FAILED: Should not allow negative ingredient prices")
         return False
 
     except mysql.connector.Error as e:
         conn.rollback()
-        print(f"✅ CONSTRAINT WORKING: {e}")
+        print(f"CONSTRAINT HOLDS: {e}")
         return True
     finally:
         cursor.close()
 
 
 def test_zero_pizza_price(conn):
-    """Тестирует ограничение на нулевую/отрицательную цену пиццы"""
-    print("\n🍕 TESTING ZERO PIZZA PRICE CONSTRAINT")
+    print("\nTESTING ZERO PIZZA PRICE CONSTRAINT")
     print("=" * 50)
 
     cursor = conn.cursor(dictionary=True)
@@ -579,17 +571,17 @@ def test_zero_pizza_price(conn):
         """)
 
         conn.commit()
-        print("❌ CONSTRAINT FAILED: Should not allow zero pizza prices")
+        print("!!!CONSTRAINT FAILED: Should not allow zero pizza prices")
         return False
 
     except mysql.connector.Error as e:
         conn.rollback()
-        print(f"✅ CONSTRAINT WORKING: {e}")
+        print(f"CONSTRAINT WORKING: {e}")
         return True
     finally:
         cursor.close()
+
 def get_top_selling_pizzas(conn):
-    """Получает самые продаваемые пиццы"""
     try:
         cursor = conn.cursor(dictionary=True)
 
@@ -610,7 +602,7 @@ def get_top_selling_pizzas(conn):
         cursor.execute(query)
         results = cursor.fetchall()
 
-        print("\n🏆 TOP SELLING PIZZAS")
+        print("\nTOP SELLING PIZZAS")
         print("=" * 50)
         for row in results:
             print(f"{row['pizza_name']} ({row['size']}): {row['total_sold']} sold, Revenue: {row['total_revenue']} EUR")
@@ -620,7 +612,7 @@ def get_top_selling_pizzas(conn):
 
 
     except mysql.connector.Error as e:
-        print(f"❌ Error retrieving top selling pizzas: {e}")
+        print(f"Error retrieving top selling pizzas: {e}")
         return []
 
 
