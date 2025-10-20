@@ -113,6 +113,12 @@ USE_I18N = True
 
 USE_TZ = True
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+]
+CSRF_COOKIE_SECURE = False       # since you're on http://
+SESSION_COOKIE_SECURE = False
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -125,3 +131,6 @@ STATIC_ROOT = BASE_DIR / "staticfiles"     # для prod (collectstatic)
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+LOGIN_URL = "login"          # where @login_required sends you if not logged in
+LOGIN_REDIRECT_URL = "menu"  # where to go right after login
+LOGOUT_REDIRECT_URL = "start"  # after logout → starting page ("/" = login)
