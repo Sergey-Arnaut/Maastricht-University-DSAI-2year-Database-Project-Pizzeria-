@@ -284,6 +284,322 @@ def get_delivery_earnings_by_postal_code(conn):
     except mysql.connector.Error as e:
         print(f"Error retrieving delivery earnings by postal code: {e}")
         return []
+
+
+def place_order_transaction(conn, customer_id, order_items, delivery_postal_code, discount_id=None):
+    """
+    Размещает заказ в транзакции с откатом при ошибках
+    """
+    cursor = None
+    try:
+        # Начинаем транзакцию
+        conn.start_transaction()
+        cursor = conn.cursor(dictionary=True)
+
+        print("🔄 Starting order transaction...")
+
+        # 1. Проверяем существование клиента
+        cursor.execute("SELECT customer_id FROM Customer WHERE customer_id = %s", (customer_id,))
+        customer = cursor.fetchone()
+        if not customer:
+            raise Exception(f"Customer with ID {customer_id} not found")
+
+        # 2. Рассчитываем общую стоимость
+        total_price = 0
+        discount_amount = 0
+
+        for item in order_items:
+            if 'pizza_id' in item and item['pizza_id']:
+                cursor.execute("SELECT base_price FROM Pizza WHERE pizza_id = %s AND availability = TRUE",
+                               (item['pizza_id'],))
+                pizza = cursor.fetchone()
+                if not pizza:
+                    raise Exception(f"Pizza with ID {item['pizza_id']} not available")
+                total_price += pizza['base_price'] * item.get('quantity', 1)
+
+            elif 'drink_id' in item and item['drink_id']:
+                cursor.execute("SELECT price FROM Drink WHERE drink_id = %s AND availability = TRUE",
+                               (item['drink_id'],))
+                drink = cursor.fetchone()
+                if not drink:
+                    raise Exception(f"Drink with ID {item['drink_id']} not available")
+                total_price += drink['price'] * item.get('quantity', 1)
+
+            elif 'dessert_id' in item and item['dessert_id']:
+                cursor.execute("SELECT price FROM Dessert WHERE dessert_id = %s AND availability = TRUE",
+                               (item['dessert_id'],))
+                dessert = cursor.fetchone()
+                if not dessert:
+                    raise Exception(f"Dessert with ID {item['dessert_id']} not available")
+                total_price += dessert['price'] * item.get('quantity', 1)
+
+        # 3. Применяем скидку если указана
+        if discount_id:
+            cursor.execute("""
+                SELECT discount_value, discount_type 
+                FROM DiscountCode 
+                WHERE discount_id = %s AND is_active = TRUE 
+                AND (valid_until IS NULL OR valid_until >= CURDATE())
+            """, (discount_id,))
+            discount = cursor.fetchone()
+            if discount:
+                if discount['discount_type'] == 'percent':
+                    discount_amount = total_price * discount['discount_value'] / 100
+                else:
+                    discount_amount = min(discount['discount_value'], total_price)
+                total_price = max(0, total_price - discount_amount)
+            else:
+                discount_id = None  # Скидка не действительна
+
+        # 4. Создаем заказ
+        insert_order_sql = """
+        INSERT INTO `Order` (customer_id, total_price, delivery_postal_code, discount_id, discount_amount, status)
+        VALUES (%s, %s, %s, %s, %s, 'pending')
+        """
+        cursor.execute(insert_order_sql, (customer_id, total_price, delivery_postal_code, discount_id, discount_amount))
+        order_id = cursor.lastrowid
+
+        print(f"✅ Order #{order_id} created")
+
+        # 5. Добавляем элементы заказа
+        for item in order_items:
+            if 'pizza_id' in item and item['pizza_id']:
+                cursor.execute("SELECT base_price FROM Pizza WHERE pizza_id = %s", (item['pizza_id'],))
+                pizza = cursor.fetchone()
+                insert_item_sql = """
+                INSERT INTO OrderItem (order_id, pizza_id, pizza_quantity, item_current_price)
+                VALUES (%s, %s, %s, %s)
+                """
+                cursor.execute(insert_item_sql,
+                               (order_id, item['pizza_id'], item.get('quantity', 1), pizza['base_price']))
+
+            elif 'drink_id' in item and item['drink_id']:
+                cursor.execute("SELECT price FROM Drink WHERE drink_id = %s", (item['drink_id'],))
+                drink = cursor.fetchone()
+                insert_item_sql = """
+                INSERT INTO OrderItem (order_id, drink_id, drink_quantity, item_current_price)
+                VALUES (%s, %s, %s, %s)
+                """
+                cursor.execute(insert_item_sql, (order_id, item['drink_id'], item.get('quantity', 1), drink['price']))
+
+            elif 'dessert_id' in item and item['dessert_id']:
+                cursor.execute("SELECT price FROM Dessert WHERE dessert_id = %s", (item['dessert_id'],))
+                dessert = cursor.fetchone()
+                insert_item_sql = """
+                INSERT INTO OrderItem (order_id, dessert_id, dessert_quantity, item_current_price)
+                VALUES (%s, %s, %s, %s)
+                """
+                cursor.execute(insert_item_sql,
+                               (order_id, item['dessert_id'], item.get('quantity', 1), dessert['price']))
+
+        print(f"✅ Added {len(order_items)} items to order")
+
+        # 6. Создаем платеж
+        insert_payment_sql = """
+        INSERT INTO Payment (order_id, amount, payment_method, status)
+        VALUES (%s, %s, 'card', 'pending')
+        """
+        cursor.execute(insert_payment_sql, (order_id, total_price))
+        payment_id = cursor.lastrowid
+
+        # Обновляем заказ с payment_id
+        cursor.execute("UPDATE `Order` SET payment_id = %s WHERE order_id = %s", (payment_id, order_id))
+
+        print(f"✅ Payment #{payment_id} created")
+
+        # 7. Если использовалась скидка, отмечаем использование
+        if discount_id:
+            insert_redemption_sql = """
+            INSERT INTO DiscountRedemption (discount_id, customer_id, order_id)
+            VALUES (%s, %s, %s)
+            """
+            cursor.execute(insert_redemption_sql, (discount_id, customer_id, order_id))
+            print("✅ Discount applied and recorded")
+
+        # Подтверждаем транзакцию
+        conn.commit()
+        print(f"🎉 ORDER #{order_id} SUCCESSFULLY PLACED!")
+        print(f"   Total: {total_price:.2f} EUR")
+        print(f"   Discount: {discount_amount:.2f} EUR")
+        print(f"   Delivery to: {delivery_postal_code}")
+
+        return order_id
+
+    except Exception as e:
+        # ОТКАТ ТРАНЗАКЦИИ при ошибке
+        print(f"❌ ERROR: {e}")
+        print("🔄 Rolling back transaction...")
+        if conn:
+            conn.rollback()
+        print("✅ Transaction rolled back successfully")
+        return None
+
+    finally:
+        if cursor:
+            cursor.close()
+
+
+def test_vegetarian_pizza_constraint(conn):
+    """Тестирует ограничение на невегетарианские ингредиенты в вегетарианских пиццах"""
+    print("\n🥦 TESTING VEGETARIAN PIZZA CONSTRAINT")
+    print("=" * 50)
+
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        # Находим вегетарианскую пиццу
+        cursor.execute("""
+            SELECT pizza_id, name 
+            FROM Pizza 
+            WHERE is_vegetarian = TRUE 
+            LIMIT 1
+        """)
+        vegetarian_pizza = cursor.fetchone()
+
+        if not vegetarian_pizza:
+            print("❌ No vegetarian pizzas found for testing")
+            return False
+
+        # Находим невегетарианский ингредиент
+        cursor.execute("""
+            SELECT ingredient_id, name 
+            FROM Ingredient 
+            WHERE vegetarian = FALSE 
+            LIMIT 1
+        """)
+        non_veg_ingredient = cursor.fetchone()
+
+        if not non_veg_ingredient:
+            print("❌ No non-vegetarian ingredients found for testing")
+            return False
+
+        print(
+            f"Testing: Add non-vegetarian '{non_veg_ingredient['name']}' to vegetarian pizza '{vegetarian_pizza['name']}'")
+
+        # Пытаемся добавить невегетарианский ингредиент к вегетарианской пицце
+        cursor.execute("""
+            INSERT INTO Pizza_Ingredients (pizza_id, ingredient_id, quantity)
+            VALUES (%s, %s, 1.0)
+        """, (vegetarian_pizza['pizza_id'], non_veg_ingredient['ingredient_id']))
+
+        conn.commit()
+        print("❌ CONSTRAINT FAILED: Should not allow non-vegetarian ingredients in vegetarian pizza")
+        return False
+
+    except mysql.connector.Error as e:
+        conn.rollback()
+        print(f"✅ CONSTRAINT WORKING: {e}")
+        return True
+    finally:
+        cursor.close()
+
+
+def test_discount_code_reuse(conn):
+    """Тестирует ограничение на повторное использование кодов скидок"""
+    print("\n🎫 TESTING DISCOUNT CODE REUSE CONSTRAINT")
+    print("=" * 50)
+
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        # Находим использованный discount code
+        cursor.execute("""
+            SELECT dr.discount_id, dr.order_id, dr.customer_id
+            FROM DiscountRedemption dr
+            LIMIT 1
+        """)
+        used_discount = cursor.fetchone()
+
+        if not used_discount:
+            print("ℹ️ No used discount codes found, testing with new scenario")
+            # Создаем тестовый сценарий
+            cursor.execute("""
+                INSERT INTO DiscountCode (discount_code, discount_value, discount_type, is_active)
+                VALUES ('TEST_REUSE', 10, 'value', TRUE)
+            """)
+            discount_id = cursor.lastrowid
+
+            cursor.execute("""
+                INSERT INTO DiscountRedemption (discount_id, customer_id, order_id)
+                VALUES (%s, 1, 1)
+            """, (discount_id,))
+
+            used_discount = {'discount_id': discount_id, 'order_id': 1, 'customer_id': 1}
+
+        print(f"Testing: Reuse discount code #{used_discount['discount_id']} for order #{used_discount['order_id']}")
+
+        # Пытаемся использовать тот же discount code для того же заказа
+        cursor.execute("""
+            INSERT INTO DiscountRedemption (discount_id, customer_id, order_id)
+            VALUES (%s, %s, %s)
+        """, (used_discount['discount_id'], used_discount['customer_id'], used_discount['order_id']))
+
+        conn.commit()
+        print("❌ CONSTRAINT FAILED: Should not allow discount code reuse for same order")
+        return False
+
+    except mysql.connector.Error as e:
+        conn.rollback()
+        print(f"✅ CONSTRAINT WORKING: {e}")
+        return True
+    finally:
+        cursor.close()
+
+
+def test_negative_ingredient_price(conn):
+    """Тестирует ограничение на отрицательные цены ингредиентов"""
+    print("\n💰 TESTING NEGATIVE INGREDIENT PRICE CONSTRAINT")
+    print("=" * 50)
+
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        print("Testing: Insert ingredient with negative price")
+
+        # Пытаемся создать ингредиент с отрицательной ценой
+        cursor.execute("""
+            INSERT INTO Ingredient (name, price_per_unit, vegan, vegetarian, allergen)
+            VALUES ('Test Negative Price Ingredient', -5.00, TRUE, TRUE, FALSE)
+        """)
+
+        conn.commit()
+        print("❌ CONSTRAINT FAILED: Should not allow negative ingredient prices")
+        return False
+
+    except mysql.connector.Error as e:
+        conn.rollback()
+        print(f"✅ CONSTRAINT WORKING: {e}")
+        return True
+    finally:
+        cursor.close()
+
+
+def test_zero_pizza_price(conn):
+    """Тестирует ограничение на нулевую/отрицательную цену пиццы"""
+    print("\n🍕 TESTING ZERO PIZZA PRICE CONSTRAINT")
+    print("=" * 50)
+
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        print("Testing: Insert pizza with zero base price")
+
+        # Пытаемся создать пиццу с нулевой ценой
+        cursor.execute("""
+            INSERT INTO Pizza (name, size, base_price, availability)
+            VALUES ('Test Zero Price Pizza', 'M', 0.00, TRUE)
+        """)
+
+        conn.commit()
+        print("❌ CONSTRAINT FAILED: Should not allow zero pizza prices")
+        return False
+
+    except mysql.connector.Error as e:
+        conn.rollback()
+        print(f"✅ CONSTRAINT WORKING: {e}")
+        return True
+    finally:
+        cursor.close()
 def get_top_selling_pizzas(conn):
     """Получает самые продаваемые пиццы"""
     try:
@@ -343,4 +659,9 @@ if __name__ == "__main__":
         get_delivery_earnings_by_gender(conn)
         get_delivery_earnings_by_age(conn)
         get_delivery_earnings_by_postal_code(conn)
+
+        #7 Testing
+        test_vegetarian_pizza_constraint(conn)
+        test_discount_code_reuse(conn)
+        test_negative_ingredient_price(conn)
         conn.close()
