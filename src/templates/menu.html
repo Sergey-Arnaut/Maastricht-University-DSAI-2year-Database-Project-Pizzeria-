@@ -4,7 +4,7 @@
 {% block content %}
 <h1 class="mb-3">Menu</h1>
 
-<h3 class="mt-4">Pizza</h3>
+<h3 class="mt-4">Pizzas</h3>
 <div class="row g-3">
   {% for x in pizzas %}
     <div class="col-md-6">
@@ -17,21 +17,24 @@
           </h5>
 
           {% if x.price %}
-            <p>Price <strong>{{ x.price }}</strong> €</p>
-            <form method="post" action="{% url 'add_to_cart' x.id %}" class="mt-2 d-flex gap-2 align-items-center">
-              {% csrf_token %}
-              <input type="number" name="qty" min="1" value="1" style="width:80px" class="form-control form-control-sm">
-              <button class="btn btn-danger btn-sm">To cart</button>
-            </form>
+            <p>Price: <strong>{{ x.price }}</strong> €</p>
+            <div class="d-flex gap-2">
+              <form method="post" action="{% url 'add_to_cart' x.id %}" class="d-flex gap-2 align-items-center">
+                {% csrf_token %}
+                <input type="number" name="qty" min="1" value="1" style="width:80px" class="form-control form-control-sm">
+                <button class="btn btn-danger btn-sm">Add to cart</button>
+              </form>
+              <a class="btn btn-outline-secondary btn-sm" href="{% url 'customize_pizza' x.id %}">Customize</a>
+            </div>
           {% else %}
-            <p class="text-muted">No price</p>
-            <button class="btn btn-secondary btn-sm" disabled>To cart</button>
+            <p class="text-muted">No composition — price not computed</p>
+            <a class="btn btn-outline-secondary btn-sm disabled">Add to cart</a>
           {% endif %}
         </div>
       </div>
     </div>
   {% empty %}
-    <p class="text-muted">Pizza is unavailavle</p>
+    <p class="text-muted">No pizzas.</p>
   {% endfor %}
 </div>
 
@@ -42,17 +45,17 @@
       <div class="card shadow-sm">
         <div class="card-body">
           <h5 class="card-title">{{ d.name }}</h5>
-          <p>Price <strong>{{ d.price }}</strong> €</p>
+          <p>Price: <strong>{{ d.price }}</strong> €</p>
           <form method="post" action="{% url 'add_drink_to_cart' d.drink_id %}" class="mt-2 d-flex gap-2 align-items-center">
             {% csrf_token %}
             <input type="number" name="qty" min="1" value="1" style="width:80px" class="form-control form-control-sm">
-            <button class="btn btn-outline-primary btn-sm">To cart</button>
+            <button class="btn btn-outline-primary btn-sm">Add to cart</button>
           </form>
         </div>
       </div>
     </div>
   {% empty %}
-    <p class="text-muted">Drinks are unavailable</p>
+    <p class="text-muted">No drinks.</p>
   {% endfor %}
 </div>
 
@@ -63,23 +66,23 @@
       <div class="card shadow-sm">
         <div class="card-body">
           <h5 class="card-title">{{ ds.name }}</h5>
-          <p>Price <strong>{{ ds.price }}</strong> €</p>
+          <p>Price: <strong>{{ ds.price }}</strong> €</p>
           <form method="post" action="{% url 'add_dessert_to_cart' ds.dessert_id %}" class="mt-2 d-flex gap-2 align-items-center">
             {% csrf_token %}
             <input type="number" name="qty" min="1" value="1" style="width:80px" class="form-control form-control-sm">
-            <button class="btn btn-outline-success btn-sm">To cart</button>
+            <button class="btn btn-outline-success btn-sm">Add to cart</button>
           </form>
         </div>
       </div>
     </div>
   {% empty %}
-    <p class="text-muted">Desserts are unavailable</p>
+    <p class="text-muted">No desserts.</p>
   {% endfor %}
 </div>
 
 <p class="mt-4">
   <a class="btn btn-outline-primary" href="{% url 'view_cart' %}">
-    To cart ({{ cart_count }})
+    Go to cart ({{ cart_count }})
   </a>
 </p>
 {% endblock %}

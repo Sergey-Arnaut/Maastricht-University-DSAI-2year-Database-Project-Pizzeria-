@@ -12,12 +12,15 @@ from django.views.decorators.http import require_POST
 
 from .models import (
     Customer, Pizza, Order, Orderitem,
-    Discountcode, Discountredemption, Deliveryperson, Drink, Dessert
+    Discountcode, Discountredemption, Deliveryperson, Drink, Dessert, Ingredient
 )
 from .models_view import Pizzapriceview
 from .forms import SignUpForm
 
 CANCELLATION_MINUTES = 5
+
+MARGIN = Decimal("1.40")
+VAT = Decimal("1.09")
 
 VOUCHER_MAP = {
     "PEPPELS": 15,   # 15% off
@@ -36,7 +39,7 @@ def _get_cart(request):
         if isinstance(k, int) or (isinstance(k, str) and k.isdigit()):
             norm[f"P:{int(k)}"] = int(v); changed = True
         else:
-            norm[k] = int(v)
+            norm[str(k)] = int(v)
     if changed:
         request.session["cart"] = norm
         request.session.modified = True
@@ -48,20 +51,36 @@ def _save_cart(request, cart):
     request.session.modified = True
 
 
-def _cart_key(kind: str, item_id: int) -> str:
-    return f"{kind}:{int(item_id)}"
+def _cart_key(kind: str, item_id: int, extras_str: str | None = None) -> str:
+    return f"{kind}:{int(item_id)}" + (f";E:{extras_str}" if extras_str else "")
 
 
 def _parse_key(key: str):
-    if isinstance(key, str) and ":" in key:
-        kind, sid = key.split(":", 1)
-        if sid.isdigit() and kind in ("P", "D", "S"):
-            return kind, int(sid)
-    if isinstance(key, str) and key.isdigit():
-        return "P", int(key)
-    if isinstance(key, int):
-        return "P", int(key)
-    return None, None
+
+    result = {"kind": None, "id": None, "extras": {}}
+    base, _, tail = key.partition(";E:")
+    if ":" not in base:
+        return result
+    kind, sid = base.split(":", 1)
+    if not sid.isdigit():
+        return result
+    result["kind"] = kind
+    result["id"] = int(sid)
+    if tail:
+        pairs = [p for p in tail.split(",") if p]
+        ext = {}
+        for p in pairs:
+            if "-" not in p:
+                continue
+            i_s, q_s = p.split("-", 1)
+            if i_s.isdigit() and q_s.isdigit():
+                ext[int(i_s)] = int(q_s)
+        result["extras"] = ext
+    return result
+
+
+def _extras_to_str(extras: dict[int, int]) -> str:
+    return ",".join(f"{iid}-{extras[iid]}" for iid in sorted(extras.keys()))
 
 
 def _current_customer(request) -> Customer:
@@ -85,17 +104,34 @@ def _current_customer(request) -> Customer:
     return cust
 
 
+def _compute_extras_price(extras: dict[int, int]) -> Decimal:
+    if not extras:
+        return Decimal("0.00")
+    ids = list(extras.keys())
+    ings = {i.ingredient_id: i for i in Ingredient.objects.filter(ingredient_id__in=ids)}
+    total_cost = Decimal("0.00")
+    for iid, qty in extras.items():
+        ing = ings.get(iid)
+        if not ing:
+            continue
+        total_cost += (Decimal(ing.price_per_unit or 0) * Decimal(qty))
+    price = (total_cost * MARGIN * VAT).quantize(Decimal("0.01"))
+    return price
+
+
 def _fetch_cart_rows(cart: dict):
 
     if not cart:
         return [], Decimal("0.00")
 
-    p_ids, d_ids, s_ids = [], [], []
+    p_ids, d_ids, s_ids = set(), set(), set()
+    keys_parsed = {}
     for key in cart.keys():
-        kind, iid = _parse_key(key)
-        if kind == "P": p_ids.append(iid)
-        elif kind == "D": d_ids.append(iid)
-        elif kind == "S": s_ids.append(iid)
+        parsed = _parse_key(key)
+        keys_parsed[key] = parsed
+        if parsed["kind"] == "P": p_ids.add(parsed["id"])
+        elif parsed["kind"] == "D": d_ids.add(parsed["id"])
+        elif parsed["kind"] == "S": s_ids.add(parsed["id"])
 
     pizzas = {p.pizza_id: p for p in Pizza.objects.filter(pizza_id__in=p_ids)} if p_ids else {}
     pv_map = {v.pizza_id: v for v in Pizzapriceview.objects.filter(pizza_id__in=p_ids)} if p_ids else {}
@@ -105,8 +141,9 @@ def _fetch_cart_rows(cart: dict):
     rows, subtotal = [], Decimal("0.00")
 
     for key, qty in cart.items():
-        kind, iid = _parse_key(key)
-        if not kind:
+        parsed = keys_parsed.get(key) or {}
+        kind, iid, extras = parsed.get("kind"), parsed.get("id"), parsed.get("extras") or {}
+        if not kind or iid is None:
             continue
         qty = max(1, int(qty))
 
@@ -115,29 +152,30 @@ def _fetch_cart_rows(cart: dict):
             if not p:
                 continue
             v = pv_map.get(iid)
-            name = (v.name if v else p.name)
-            unit = (v.price_with_vat if v else Decimal(p.base_price or 0))
+            base_name = (v.name if v else p.name)
+            base_unit = (v.price_with_vat if v else Decimal(p.base_price or 0))
+            extra_unit = _compute_extras_price(extras)
+            unit = (Decimal(base_unit) + extra_unit).quantize(Decimal("0.01"))
             size = p.size
             obj = p
+            name = base_name
         elif kind == "D":
             d = drinks.get(iid)
-            if not d or not d.availability:
-                continue
-            name = d.name
+            if not d or not d.availability: continue
             unit = Decimal(d.price or 0)
-            size = None
-            obj = None
+            size = None; obj = None; name = d.name
         else:
             ds = desserts.get(iid)
-            if not ds or not ds.availability:
-                continue
-            name = ds.name
+            if not ds or not ds.availability: continue
             unit = Decimal(ds.price or 0)
-            size = None
-            obj = None
+            size = None; obj = None; name = ds.name
 
         line = (Decimal(unit) * Decimal(qty)).quantize(Decimal("0.01"))
-        rows.append({"kind": kind, "id": iid, "name": name, "size": size, "qty": qty, "unit": Decimal(unit), "sum": line, "pizza": obj})
+        rows.append({
+            "kind": kind, "id": iid, "extras": extras, "name": name,
+            "size": size, "qty": qty, "unit": Decimal(unit),
+            "sum": line, "pizza": obj
+        })
         subtotal += line
 
     return rows, subtotal.quantize(Decimal("0.01"))
@@ -316,7 +354,6 @@ def _assign_delivery(order_id: int, delivery_postal_code: str):
     return dp_id
 
 
-# ----------------- Public views -----------------
 
 def menu(request):
     cart = _get_cart(request)
@@ -348,6 +385,50 @@ def menu(request):
     })
 
 
+def customize_pizza(request, pizza_id: int):
+    pizza = get_object_or_404(Pizza, pk=pizza_id, availability=True)
+    base = Pizzapriceview.objects.filter(pizza_id=pizza.pizza_id).first()
+    base_price = Decimal(base.price_with_vat if base else pizza.base_price or 0)
+
+    if pizza.is_vegan:
+        ings = Ingredient.objects.filter(vegan=True).order_by("name")
+    elif pizza.is_vegetarian:
+        ings = Ingredient.objects.filter(vegetarian=True).order_by("name")
+    else:
+        ings = Ingredient.objects.all().order_by("name")
+
+    if request.method == "POST":
+        extras: dict[int, int] = {}
+        for i in ings:
+            qty_str = request.POST.get(f"ing_{i.ingredient_id}", "").strip()
+            if qty_str.isdigit():
+                q = int(qty_str)
+                if q > 0:
+                    if pizza.is_vegan and not i.vegan:
+                        messages.error(request, f"{i.name} is not allowed for a vegan pizza.")
+                        return redirect("customize_pizza", pizza_id=pizza_id)
+                    if pizza.is_vegetarian and not i.vegetarian:
+                        messages.error(request, f"{i.name} is not allowed for a vegetarian pizza.")
+                        return redirect("customize_pizza", pizza_id=pizza_id)
+                    extras[i.ingredient_id] = q
+
+        qty = max(1, int(request.POST.get("qty", 1)))
+        extras_str = _extras_to_str(extras)
+        cart = _get_cart(request)
+        key = _cart_key("P", pizza_id, extras_str if extras else None)
+        cart[key] = cart.get(key, 0) + qty
+        _save_cart(request, cart)
+        return redirect("view_cart")
+
+    return render(request, "customize.html", {
+        "pizza": pizza,
+        "base_price": base_price,
+        "ingredients": ings,
+        "margin": MARGIN,
+        "vat": VAT,
+    })
+
+
 def view_cart(request):
     rows, subtotal = _fetch_cart_rows(_get_cart(request))
     return render(request, "cart.html", {"rows": rows, "subtotal": subtotal})
@@ -356,7 +437,6 @@ def view_cart(request):
 
 @require_POST
 def add_to_cart(request, pizza_id: int):
-    """Add pizza."""
     qty = max(1, int(request.POST.get("qty", 1)))
     cart = _get_cart(request)
     key = _cart_key("P", pizza_id)
@@ -388,7 +468,10 @@ def add_dessert_to_cart(request, dessert_id: int):
 @require_POST
 def remove_cart_item(request, kind: str, item_id: int):
     cart = _get_cart(request)
-    cart.pop(_cart_key(kind.upper(), item_id), None)
+    prefix = f"{kind.upper()}:{int(item_id)}"
+    to_del = [k for k in list(cart.keys()) if k == prefix or k.startswith(prefix + ";E:")]
+    for k in to_del:
+        cart.pop(k, None)
     _save_cart(request, cart)
     return redirect("view_cart")
 
@@ -426,12 +509,23 @@ def checkout(request):
 
         for r in rows:
             if r["kind"] == "P":
-                Orderitem.objects.create(
+                main = Orderitem.objects.create(
                     order_id=order.order_id,
                     pizza_id=r["id"],
                     pizza_quantity=r["qty"],
-                    item_current_price=r["unit"],
+                    item_current_price=r["unit"],   # per-unit price incl. extras
                 )
+                if r.get("extras"):
+                    for ing_id, q in r["extras"].items():
+
+                        Orderitem.objects.create(
+                            order_id=order.order_id,
+                            pizza_id=r["id"],
+                            ingredient_id=ing_id,
+                            pizza_quantity=None,
+                            item_current_price=Decimal("0.00"),
+                            special_instructions="extra",
+                        )
             elif r["kind"] == "D":
                 Orderitem.objects.create(
                     order_id=order.order_id,
@@ -461,9 +555,9 @@ def checkout(request):
 
     _save_cart(request, {})
     if dp_id:
-        messages.success(request, f"Order №{order.order_id} is created. Sale: {discount_amount}€")
+        messages.success(request, f"Order #{order.order_id} created. Discounts: €{discount_amount}")
     else:
-        messages.warning(request, f"Order №{order.order_id} si created, but no delivery is available, please wait.")
+        messages.warning(request, f"Order #{order.order_id} created, but no courier is available in the next 30 minutes.")
     return redirect("checkout_done", order_id=order.order_id)
 
 
